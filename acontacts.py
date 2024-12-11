@@ -54,7 +54,7 @@ def write_residue_contacts(residue_contacts, config):
         all_interest_contacts.append(contacts['interest_contacts'])
 
     # Calculate and write average contacts
-    # Convert lists to numpy arrays for easy averaging
+    # Convert lists to numpy arrays
     all_generic_contacts = np.array(all_generic_contacts)
     all_interest_contacts = np.array(all_interest_contacts)
 
@@ -164,14 +164,6 @@ def export_pdb(universe, residue_contacts, config, av_interest_contacts, av_gene
     - Sequentially numbered residues
     - Custom residue-wise B-factors
 
-    Parameters:
-    -----------
-    universe : MDAnalysis.Universe
-        The input universe to be exported
-    residue_bfactors : list or numpy.ndarray
-        List of B-factors, one for each residue
-    output_filename : str
-        Path and name of the output PDB file
     """
     cat_m_interest, m_interest_ranges, cat_m_generic, m_generic_ranges, project = parse_config_file(config)
     output_dir = project
@@ -281,15 +273,6 @@ def calculate_contact_enrichment(universe, contact_matrix, project, m_interest_r
     """
     Calculate contact enrichment between different label groups in contact matrix sub-matrices corresponding
     to contacts between molecules of interest.
-
-    Parameters:
-    -----------
-    sub_matrix : numpy.ndarray
-        Contact matrix (can be non-symmetric)
-    row_labels : list
-        Labels corresponding to rows of the matrix
-    col_labels : list
-        Labels corresponding to columns of the matrix
 
     Returns:
     --------
