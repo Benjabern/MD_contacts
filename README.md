@@ -15,7 +15,7 @@ Using 128 cores
 To analyse the contact matrix, in addition to the .json output from ccontacts.py and a corresponding .gro file,
 a config file specifying residue index ranges of interest needs to be provided (see template config file).
 
-***Crucially, the nature of the contacts calculation and consequently the analysis script converts all original residue numberings into one continous numbering scheme which might deviate from the residue numberings in the original topology. This is releveant for multicopy systems or systems specifying multiple protein chains. The new indexes are correspond to .gro line numbers -1 (ignoring box vectors, titles, comments, atoms count, etc.)***
+***Crucially, the nature of the contacts calculation and consequently the analysis script converts all original residue numberings into one continous numbering scheme which might deviate from the residue numberings in the original topology. This is releveant for multicopy systems or systems specifying multiple protein chains. The new indexes correspond to .gro line numbers -1 (ignoring box vectors, titles, comments, atoms count, etc.)***
 
 All specified molecules of interest will be analysed individually as well as on average. A residue wise profile
 of contacts will be created for contacts to the ligand group as well as to all other members of the molecule of interest group.
