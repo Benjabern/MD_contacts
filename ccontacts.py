@@ -171,7 +171,7 @@ def parse_arguments():
     parser.add_argument(
         "-o", "--output", 
         default="contacts.json", 
-        help="Output JSON file path (default: micro_contacts.json)"
+        help="Output JSON file path (default: contacts.json)"
     )
     parser.add_argument(
         "-c", "--cutoff", 
@@ -188,7 +188,7 @@ def parse_arguments():
     parser.add_argument(
         "--chunk-size", 
         type=int, 
-        default=100, 
+        default=1000,
         help="Number of frames to process in each chunk (default: 100)"
     )
     parser.add_argument(
