@@ -268,99 +268,84 @@ def parse_config_file(filename):
                     print(f"Warning: Skipping invalid range entry: {line}")
 
     return cat_m_interest, m_interest_ranges, cat_m_generic, m_generic_ranges, project
-
-def calculate_contact_enrichment(universe, contact_matrix, project, m_interest_ranges, vmax=None, diag=False, norm=False):
-    """
-    Calculate contact enrichment between different label groups in contact matrix sub-matrices corresponding
-    to contacts between molecules of interest.
-
-    Returns:
-    --------
-    enrichment_matrix : numpy.ndarray
-    """
-    # set outpath
+def enrichments(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq):
     out_path = os.path.join(project, f'{cat_m_interest}_c_enrichments_{project}.pdf')
-    # get components of interest
     interest_components = [c for c in m_interest_ranges.keys()]
-    # get total set of residues
-    seq = []
-    [seq.append(str(r).split()[1].rstrip(",")) for r in universe.residues]
-    seq = np.array(seq)
-    # empty list of enrichment matrices for all molecule of interest combination enrichment matrices
-    enrichments = []
-    # start loop for all combinations of molecule of interest
+    generic_components = [c for c in m_generic_ranges.keys()]
+    combination_counts = {}
+    total_contacts = 0
+    total_pairs = 0
     for m_of_interest in interest_components:
-        #get submatrix and corresponding labels
         p_start, p_end = m_interest_ranges[m_of_interest]
-        row_labels = seq[p_start:p_end]
-        # get columns
         other_m_of_interest = [p for p in interest_components if p != m_of_interest]
         other_interest_contact_ranges = [m_interest_ranges[p] for p in other_m_of_interest]
-        interest_columns = np.concatenate([
-            np.arange(p_start, p_end) for (p_start, p_end) in other_interest_contact_ranges
-        ])
-        col_labels = seq[interest_columns]
-        unique_labels = sorted(set(list(col_labels)+list(row_labels)))
-        interest_contact_matrix = contact_matrix[p_start:p_end, interest_columns]
-        # initialize enrichment matrix
-        enrichment_matrix = np.zeros((len(unique_labels), len(unique_labels)))
-        # Total number of contacts
-        total_contacts = np.sum(interest_contact_matrix)
+        if other_interest_contact_ranges:
 
-        # Calculate enrichment for each label pair
-        for i, label1 in enumerate(unique_labels):
-            for j, label2 in enumerate(unique_labels):
-                # Find indices for each label
-                label1_rows = [idx for idx, label in enumerate(row_labels) if label == label1]
-                label1_cols = [idx for idx, label in enumerate(col_labels) if label == label1]
+            # Create a list of column indices for interest contacts
+            interest_columns = np.concatenate([
+                np.arange(p_start, p_end) for (p_start, p_end) in other_interest_contact_ranges
+            ])
 
-                label2_rows = [idx for idx, label in enumerate(row_labels) if label == label2]
-                label2_cols = [idx for idx, label in enumerate(col_labels) if label == label2]
-
-                # Submatrix for these labels
-                submatrix = interest_contact_matrix[np.ix_(label1_rows + label2_rows,
-                                              label1_cols + label2_cols)]
-
-                # Observed contacts between these labels
-                observed_contacts = np.sum(submatrix)
-
-                # Total possible contacts
-                max_possible_contacts = len(label1_rows) * len(label2_cols)
-                expected = max_possible_contacts/(len(col_labels)*len(row_labels))
-
-                real = observed_contacts/total_contacts
-                enrichment_matrix[i, j] = real/expected
-        enrichments.append(enrichment_matrix)
-    enrichment = np.mean(enrichments, axis=0)
-    if norm:
-        enrichment = np.where(enrichment >= 1, enrichment, np.nan)
-    i, j = np.indices(enrichment.shape)
-
-    if not diag:
-        enrichment[i == j] = np.nan
-
-    c_enr_map = pd.DataFrame(data=enrichment[::-1, :], index=unique_labels[::-1], columns=unique_labels)
-
-    fig, axs = plt.subplots(figsize=(10, 10), constrained_layout=True)
-
-    if norm:
-        if vmax is None:
-            sns.heatmap(c_enr_map, annot=False, cmap="Reds", vmin=1)
+            # Extract submatrix for interest contacts
+            p_mat = contact_matrix[p_start:p_end, interest_columns]
+            rlabels = seq[p_start:p_end]
+            clabels = seq[interest_columns]
         else:
-            sns.heatmap(c_enr_map, annot=False, cmap="Reds", vmin=1, vmax=vmax)
-    elif vmax is None:
-        sns.heatmap(c_enr_map, annot=False, cmap="coolwarm", vmin=0, center=1)
-    else:
-        sns.heatmap(c_enr_map, annot=False, cmap="coolwarm", vmin=0, center=1, vmax=vmax)
+            p_mat = contact_matrix[p_start:p_end, p_start:p_end]
+            rlabels = seq[p_start:p_end]
+            clabels = seq[p_start:p_end]
+        total_pairs += len(rlabels)*len(clabels)
+        total_contacts += np.sum(p_mat)
+        for i, row_label in enumerate(rlabels):
+            for j, col_label in enumerate(clabels):
+                combination = frozenset([row_label, col_label])
+                count = p_mat[i, j]
+                if combination not in combination_counts:
+                    combination_counts[combination] = {
+                        'total_count': 0,
+                        'occurrences': 0
+                    }
+
+                # Update total count and increment occurrences
+                combination_counts[combination]['total_count'] += count
+                combination_counts[combination]['occurrences'] += 1
+    # Extract unique labels
+    labels = sorted({label for key in combination_counts.keys() for label in key})
+    label_index = {label: i for i, label in enumerate(labels)}
+    # Initialize the matrix
+    size = len(labels)
+    matrix = np.zeros((size, size))
+    for key, values in combination_counts.items():
+        count = values['total_count']
+        occurrences = values['occurrences']
+        # Calculate the value
+        if occurrences > 0 and total_contacts > 0:
+            value = ((count) / total_contacts) / (occurrences / total_pairs)
+        else:
+            value = 0
+
+        # Update the matrix for each pair in the combination
+        for label1 in key:
+            for label2 in key:
+                idx1, idx2 = label_index[label1], label_index[label2]
+                matrix[idx1, idx2] = value
+    c_enr_map = pd.DataFrame(data=matrix[::-1, :], index=labels[::-1], columns=labels)
+    fig, axs = plt.subplots(figsize=(10, 10), constrained_layout=True)
+    sns.heatmap(c_enr_map, annot=False, cmap="coolwarm", vmin=0, center=1)
     plt.title('Contacts enrichment matrix', fontsize=20)
     try:
         fig.savefig(out_path)
-        print("File",out_path,"created\n")
+        print("File", out_path, "created\n")
     except:
-        print("Error writing file",out_path + '\n')
+        print("Error writing file", out_path + '\n')
 
-
-
+def clean_seq(u):
+    seq = []
+    [seq.append(str(r).split()[1].rstrip(",")) for r in u.residues]
+    seq = np.array(seq)
+    replacements = {"GLH": "GLU", "CYX": "CYS", "HID": "HIS", "HIE": "HIS"}
+    seq = np.vectorize(lambda x: replacements.get(x, x))(seq)
+    return seq
 config = sys.argv[2]
 input = sys.argv[1]
 structure = sys.argv[3]
@@ -371,9 +356,10 @@ contact_matrix = np.array(cmap, dtype=int)
 contact_matrix = np.array(contact_matrix)
 cat_m_interest, m_interest_ranges, name_m_generic, m_generic_ranges, project = parse_config_file(config)
 u = mda.Universe(structure)
+seq = clean_seq(u)
 u.add_TopologyAttr('tempfactors', range(len(u.atoms)))
 # Analyze residue contacts
 residue_contacts = analyze_residue_contacts(contact_matrix, m_interest_ranges, m_generic_ranges)
 av_generic_contacts, av_interest_contacts = write_residue_contacts(residue_contacts, config)
 export_pdb(u, residue_contacts, config, av_interest_contacts, av_generic_contacts)
-calculate_contact_enrichment(u, contact_matrix, project, m_interest_ranges, diag=True, norm=True, vmax=None)
+enrichments(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq)
