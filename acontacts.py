@@ -346,6 +346,106 @@ def clean_seq(u):
     replacements = {"GLH": "GLU", "CYX": "CYS", "HID": "HIS", "HIE": "HIS"}
     seq = np.vectorize(lambda x: replacements.get(x, x))(seq)
     return seq
+
+def scale(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq):
+    out_path = os.path.join(project, f'{cat_m_interest}_c_enrichments_{project}.pdf')
+    interest_components = [c for c in m_interest_ranges.keys()]
+    generic_components = [c for c in m_generic_ranges.keys()]
+    combination_counts = {}
+    total_contacts = 0
+    total_pairs = 0
+    for m_of_interest in interest_components:
+        p_start, p_end = m_interest_ranges[m_of_interest]
+        other_m_of_interest = [p for p in generic_components]
+        other_interest_contact_ranges = [m_generic_ranges[p] for p in other_m_of_interest]
+
+        # Create a list of column indices for interest contacts
+        interest_columns = np.concatenate([np.arange(p_start, p_end) for (p_start, p_end) in other_interest_contact_ranges])
+
+        # Extract submatrix for interest contacts
+        p_mat = contact_matrix[p_start:p_end, interest_columns]
+        rlabels = seq[p_start:p_end]
+        clabels = seq[interest_columns]
+        total_pairs += len(rlabels)*len(clabels)
+        total_contacts += np.sum(p_mat)
+        for i, row_label in enumerate(rlabels):
+            for j, col_label in enumerate(clabels):
+                combination = frozenset([row_label, col_label])
+                count = p_mat[i, j]
+                if combination not in combination_counts:
+                    combination_counts[combination] = {
+                        'total_count': 0,
+                        'occurrences': 0
+                    }
+
+                # Update total count and increment occurrences
+                combination_counts[combination]['total_count'] += count
+                combination_counts[combination]['occurrences'] += 1
+    # Extract unique labels
+    labels = sorted({label for key in combination_counts.keys() for label in key})
+    label_index = {label: i for i, label in enumerate(labels)}
+    # Initialize the matrix
+    size = len(labels)
+    matrix = np.zeros((size, size))
+    for key, values in combination_counts.items():
+        count = values['total_count']
+        occurrences = values['occurrences']
+        # Calculate the value
+        if occurrences > 0 and total_contacts > 0:
+            value = ((count) / total_contacts) / (occurrences / total_pairs)
+        else:
+            value = 0
+
+        # Update the matrix for each pair in the combination
+        for label1 in key:
+            for label2 in key:
+                idx1, idx2 = label_index[label1], label_index[label2]
+                matrix[idx1, idx2] = value
+    labels = sorted({label for key in combination_counts.keys() for label in key})
+    target_labels = np.unique(clabels)
+    figsize = (12, 3)
+    out_path = os.path.join(project, f'{project}_scale.png')
+    # Get indices for target labels
+    target_indices = [labels.index(label) for label in target_labels if label in labels]
+
+    # Create a list of all labels excluding the targets
+    comparison_labels = [label for label in labels if label not in target_labels]
+    comparison_indices = [labels.index(label) for label in comparison_labels]
+
+    # Extract the relevant rows and columns
+    filtered_matrix = matrix[target_indices][:, comparison_indices]
+
+    # Create DataFrame with proper labels
+    filtered_df = pd.DataFrame(
+        data=filtered_matrix,
+        index=target_labels,
+        columns=comparison_labels
+    )
+
+    # Calculate appropriate figure height based on number of target labels
+    height = max(len(target_labels) * 0.5, 2)
+    fig, ax = plt.subplots(figsize=(figsize[0], height), constrained_layout=True)
+
+    # Create the heatmap
+    sns.heatmap(filtered_df,
+                annot=False,
+                cmap="coolwarm",
+                vmin=0,
+                center=1,
+                ax=ax,
+                xticklabels=True,
+                yticklabels=True)
+
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    # plt.title('enrichment scale', fontsize=20)
+    try:
+        fig.savefig(out_path)
+        print("File", out_path, "created\n")
+    except:
+        print("Error writing file", out_path + '\n')
+
+
 config = sys.argv[2]
 input = sys.argv[1]
 structure = sys.argv[3]
@@ -363,3 +463,5 @@ residue_contacts = analyze_residue_contacts(contact_matrix, m_interest_ranges, m
 av_generic_contacts, av_interest_contacts = write_residue_contacts(residue_contacts, config)
 export_pdb(u, residue_contacts, config, av_interest_contacts, av_generic_contacts)
 enrichments(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq)
+if len(m_generic_ranges) > 0:
+    scale(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq)
