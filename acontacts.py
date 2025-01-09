@@ -443,7 +443,7 @@ def scale(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_in
     # plt.title('enrichment scale', fontsize=20)
     try:
         fig.savefig(out_path)
-        print("File", out_path, "created\n")
+        print("File", out_path, "created")
     except:
         print("Error writing file", out_path + '\n')
 
@@ -464,6 +464,6 @@ u.add_TopologyAttr('tempfactors', range(len(u.atoms)))
 residue_contacts = analyze_residue_contacts(contact_matrix, m_interest_ranges, m_generic_ranges)
 av_generic_contacts, av_interest_contacts = write_residue_contacts(residue_contacts, config)
 export_pdb(u, residue_contacts, config, av_interest_contacts, av_generic_contacts)
-enrichments(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq)
 if len(m_generic_ranges) > 0:
     scale(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq)
+enrichments(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq)
