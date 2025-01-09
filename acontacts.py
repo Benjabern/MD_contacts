@@ -1,13 +1,15 @@
-import sys
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import MDAnalysis as mda
-import numpy as np
-from MDAnalysis.coordinates.PDB import PDBWriter
 import json
 import os
+import sys
 import warnings
+
+import MDAnalysis as mda
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from MDAnalysis.coordinates.PDB import PDBWriter
+
 # suppress some MDAnalysis warnings when writing PDB files
 warnings.filterwarnings('ignore')
 

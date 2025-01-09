@@ -1,16 +1,17 @@
-import MDAnalysis as mda
-from MDAnalysis.analysis.distances import distance_array
-import numpy as np
-import multiprocessing as mp
-from typing import List, Tuple
-import time
-import os
-import json
-import traceback
-import sys
 import argparse
+import json
 import logging
+import multiprocessing as mp
+import os
+import sys
+import time
+import traceback
 from datetime import datetime
+
+import MDAnalysis as mda
+import numpy as np
+from MDAnalysis.analysis.distances import distance_array
+
 
 def setup_logging(log_file=None):
     """
