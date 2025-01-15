@@ -407,6 +407,7 @@ def scale(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_in
     target_labels = np.unique(clabels)
     figsize = (12, 3)
     out_path = os.path.join(project, f'{project}_scale.png')
+    outpath_txt = os.path.join(project, f'{project}_scale.txt')
     # Get indices for target labels
     target_indices = [labels.index(label) for label in target_labels if label in labels]
 
@@ -423,7 +424,7 @@ def scale(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_in
         index=target_labels,
         columns=comparison_labels
     )
-
+    filtered_df.transpose().to_csv(outpath_txt, sep=' ', mode='a')
     # Calculate appropriate figure height based on number of target labels
     height = max(len(target_labels) * 0.5, 2)
     fig, ax = plt.subplots(figsize=(figsize[0], height), constrained_layout=True)
