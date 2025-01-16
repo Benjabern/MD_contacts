@@ -15,16 +15,7 @@ warnings.filterwarnings('ignore')
 
 
 def write_residue_contacts(residue_contacts, config):
-    """
-    Write residue contact information to files.
 
-    Parameters:
-    -----------
-    residue_contacts : dict
-        Dictionary containing contact information for each interest
-    output_dir : str, optional
-        Directory to save output files
-    """
     cat_m_interest, m_interest_ranges, cat_m_generic, m_generic_ranges, project = parse_config_file(config)
     output_dir = project
     # Create output directory if it doesn't exist
@@ -82,22 +73,7 @@ def write_residue_contacts(residue_contacts, config):
 
 
 def analyze_residue_contacts(contact_matrix, m_interest_ranges, m_generic_ranges):
-    """
-    Analyze contacts for each residue in interests with generics and other interests.
 
-    Parameters:
-    -----------
-    sub_matrix : numpy.ndarray
-        2D matrix of binary contacts between residues
-    component_ranges : dict
-        Dictionary with keys as component names and values as lists of
-        [start_index, end_index] for each component
-
-    Returns:
-    --------
-    dict: Containing contact information for each molecule of interest
-          containing both (group)internal and external contacts.
-    """
     # Identify interest and generic components
     nframes = contact_matrix[0][0]
     interest_components = [c for c in m_interest_ranges.keys()]
@@ -161,12 +137,7 @@ def analyze_residue_contacts(contact_matrix, m_interest_ranges, m_generic_ranges
     return residue_contacts
 
 def export_pdb(universe, residue_contacts, config, av_interest_contacts, av_generic_contacts):
-    """
-    Export an MDAnalysis Universe to a PDB file with:
-    - Sequentially numbered residues
-    - Custom residue-wise B-factors
 
-    """
     cat_m_interest, m_interest_ranges, cat_m_generic, m_generic_ranges, project = parse_config_file(config)
     output_dir = project
     for i, residue in enumerate(universe.residues, start=1):
@@ -214,15 +185,7 @@ def export_pdb(universe, residue_contacts, config, av_interest_contacts, av_gene
         seq_uni.residues[start:end].segments = new_segment
 
 def parse_config_file(filename):
-    """
-    Parse a molecule configuration file.
 
-    Args:
-        filename (str): Path to the configuration file
-
-    Returns:
-        tuple: (name_m_interest, m_interest_ranges, name_m_generic, m_generic_ranges)
-    """
     # Initialize variables to store parsed data
     cat_m_interest = ''
     m_interest_ranges = {}
@@ -271,6 +234,7 @@ def parse_config_file(filename):
 
     return cat_m_interest, m_interest_ranges, cat_m_generic, m_generic_ranges, project
 def enrichments(contact_matrix, m_interest_ranges, m_generic_ranges, project, cat_m_interest, seq):
+
     out_path = os.path.join(project, f'{cat_m_interest}_c_enrichments_{project}.pdf')
     interest_components = [c for c in m_interest_ranges.keys()]
     generic_components = [c for c in m_generic_ranges.keys()]
