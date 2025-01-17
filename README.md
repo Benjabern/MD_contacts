@@ -22,7 +22,7 @@ of contacts will be created for contacts to the ligand group as well as to all o
 A pdb structure for each member of the molecule of interst group containing the the contacts to other molecules of interst as well
 as the ligand as b-factors will be created in addition to a matrix of pairwise enrichments in contacts bewteen molecules of interest.
 # Example usage
-> python3 acontacts.py mysystem_contacts.json mystructure.gro mysystem.cfg
+> python3 acontacts.py mysystem_contacts.json mysystem.cfg mystructure.gro
 
 ## Requirements
 python3
