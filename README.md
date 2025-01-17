@@ -1,5 +1,5 @@
 ## Calculation of contacts
-Two main scripts are provided. To calculate an all gainst all contact matrix in the form of a json file, ccontacts.py is used.
+Two main scripts are provided. To calculate an all against all contact matrix in the form of a json file, ccontacts.py is used.
 The script is highly parralelizable and scales well with number of provided cores.
 It is recomended to do a test run with a small number of parallel jobs (-j or --jobs) to estimate the memory requirements
 per job. The chunk size parameter is usually fine at default value but lower values specified with --chunk-size can be used in
