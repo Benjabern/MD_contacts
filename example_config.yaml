@@ -1,0 +1,20 @@
+# Configuration for molecular contact analysis
+project: hcptFAB5_triA
+
+# Molecules of interest (protein, RNA - multicopy system)
+# These will be analyzed individually as well as on average
+molecules_of_interest:
+  name: hcptFAB
+  components:
+    hcptFAB_1: [1, 6507]
+    hcptFAB_2: [6508, 13014]
+    hcptFAB_3: [13015, 19521]
+    hcptFAB_4: [19522, 26028]
+    hcptFAB_5: [26029, 32535]
+
+# Generic molecules (ligands/excipients/detergents)
+# These are treated interchangeably and not analyzed against each other
+generic_molecules:
+  name: triA
+  components:
+    triA: [32536, 36455]
