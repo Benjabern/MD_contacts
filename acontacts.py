@@ -1,8 +1,8 @@
 import json
-import os
 import sys
+import warnings
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set, Union
 
 import MDAnalysis as mda
 import matplotlib.pyplot as plt
@@ -13,10 +13,21 @@ import yaml
 from MDAnalysis.coordinates.PDB import PDBWriter
 from dataclasses import dataclass
 
+# suppress some MDAnalysis warnings when writing PDB files
+warnings.filterwarnings('ignore')
+
+@dataclass
+class ChainConfig:
+    chain_id: str
+    atom_range: List[int]
+
+
 @dataclass
 class MoleculeConfig:
     name: str
     components: Dict[str, List[int]]
+    chains: Optional[Dict[str, List[ChainConfig]]] = None  # Each component can have multiple chains
+
 
 @dataclass
 class Config:
@@ -24,29 +35,87 @@ class Config:
     molecules_of_interest: MoleculeConfig
     generic_molecules: Optional[MoleculeConfig]
 
+    def validate_chain_ranges(self):
+        """Validate that chain atom ranges are within their component bounds."""
+
+        def _validate_component_chains(component_name: str,
+                                       component_range: List[int],
+                                       chains: List[ChainConfig]) -> List[str]:
+            errors = []
+            start, end = component_range
+            for chain in chains:
+                chain_start, chain_end = chain.atom_range
+                if chain_start < start or chain_end > end:
+                    errors.append(
+                        f"Chain {chain.chain_id} range [{chain_start}, {chain_end}] in component "
+                        f"{component_name} exceeds component bounds [{start}, {end}]"
+                    )
+                # Check for overlapping chains
+                for other_chain in chains:
+                    if chain != other_chain:
+                        if (chain_start <= other_chain.atom_range[1] and
+                                chain_end >= other_chain.atom_range[0]):
+                            errors.append(
+                                f"Overlapping chain ranges detected in {component_name}: "
+                                f"Chain {chain.chain_id} [{chain_start}, {chain_end}] overlaps with "
+                                f"Chain {other_chain.chain_id} {other_chain.atom_range}"
+                            )
+            return errors
+
+        errors = []
+
+        # Validate molecules of interest
+        if self.molecules_of_interest.chains:
+            for comp_name, comp_range in self.molecules_of_interest.components.items():
+                if comp_name in self.molecules_of_interest.chains:
+                    errors.extend(_validate_component_chains(
+                        comp_name,
+                        comp_range,
+                        self.molecules_of_interest.chains[comp_name]
+                    ))
+
+        # Validate generic molecules
+        if self.generic_molecules and self.generic_molecules.chains:
+            for comp_name, comp_range in self.generic_molecules.components.items():
+                if comp_name in self.generic_molecules.chains:
+                    errors.extend(_validate_component_chains(
+                        comp_name,
+                        comp_range,
+                        self.generic_molecules.chains[comp_name]
+                    ))
+
+        if errors:
+            raise ValueError("Chain validation errors:\n" + "\n".join(errors))
+
+
 class ContactAnalysis:
     def __init__(self, universe: mda.Universe, config: Config, contact_matrix: np.ndarray):
         self.universe = universe
         self.config = config
         self.contact_matrix = contact_matrix
         self.seq = self._clean_sequence()
+        self.original_resids = self._store_original_resids()
         self._renumber_residues()
         self.m_interest_ranges, self.m_generic_ranges = self._convert_atom_ranges()
+
+    def _store_original_resids(self) -> Dict[int, int]:
+        """Store mapping between sequential and original residue IDs."""
+        return {i + 1: res.resid for i, res in enumerate(self.universe.residues)}
 
     def _clean_sequence(self) -> np.ndarray:
         """Clean and standardize residue names in sequence."""
         seq = [str(r).split()[1].rstrip(",") for r in self.universe.residues]
         seq = np.array(seq)
         replacements = {
-            "GLH": "GLU", 
-            "CYX": "CYS", 
-            "HID": "HIS", 
+            "GLH": "GLU",
+            "CYX": "CYS",
+            "HID": "HIS",
             "HIE": "HIS"
         }
         return np.vectorize(lambda x: replacements.get(x, x))(seq)
 
     def _renumber_residues(self):
-        """Renumber residues in universe sequentially."""
+        """Renumber residues in universe sequentially for internal processing."""
         for i, residue in enumerate(self.universe.residues, start=1):
             residue.resid = i
 
@@ -54,7 +123,7 @@ class ContactAnalysis:
         """Convert atom ranges to residue ranges."""
         m_interest_ranges = {}
         m_generic_ranges = {}
-        
+
         def _convert_range(component_range: List[int]) -> List[int]:
             start = self.universe.atoms[component_range[0] - 1].residue.resid - 1
             end = self.universe.atoms[component_range[1] - 1].residue.resid
@@ -68,6 +137,90 @@ class ContactAnalysis:
                 m_generic_ranges[name] = _convert_range(range_vals)
 
         return m_interest_ranges, m_generic_ranges
+
+    def _assign_chains(self, universe: mda.Universe, molecule_config: MoleculeConfig,
+                       component_name: str, start_idx: int, end_idx: int):
+        """Assign chain IDs to atoms based on config."""
+        # Default to no chain ID if not specified
+        for atom in universe.atoms[start_idx:end_idx]:
+            atom.chainID = ""
+
+        if not molecule_config.chains or component_name not in molecule_config.chains:
+            return
+
+        for chain_config in molecule_config.chains[component_name]:
+            chain_start = chain_config.atom_range[0] - 1  # Convert to 0-based indexing
+            chain_end = chain_config.atom_range[1]
+            for atom in universe.atoms[chain_start:chain_end]:
+                atom.chainID = chain_config.chain_id
+
+    def export_pdb(self, residue_contacts: Dict, avg_interest_contacts: np.ndarray,
+                   avg_generic_contacts: np.ndarray):
+        """Export PDB files with contact information in B-factors and specified chain IDs."""
+        output_dir = Path(self.config.project)
+        generic_name = self.config.generic_molecules.name if self.config.generic_molecules else ""
+        interest_name = self.config.molecules_of_interest.name
+
+        # Create a copy of the universe to preserve original residue IDs
+        temp_universe = self.universe.copy()
+
+        # Restore original residue IDs
+        for residue in temp_universe.residues:
+            residue.resid = self.original_resids[residue.resid]
+
+        for name_m_interest, (start, end) in self.m_interest_ranges.items():
+            # Create new segment for the molecule
+            new_segment = temp_universe.add_Segment(segid=name_m_interest)
+            residues = temp_universe.residues[start:end]
+            residues.segments = new_segment
+
+            # Get the atom indices for this component
+            component_range = self.config.molecules_of_interest.components[name_m_interest]
+            start_idx = component_range[0] - 1
+            end_idx = component_range[1]
+
+            # Assign chain IDs based on atom ranges
+            self._assign_chains(temp_universe, self.config.molecules_of_interest,
+                                name_m_interest, start_idx, end_idx)
+
+            self._write_molecule_pdbs(
+                output_dir, name_m_interest, residues,
+                residue_contacts[name_m_interest],
+                avg_generic_contacts, avg_interest_contacts,
+                generic_name, interest_name
+            )
+    def _write_molecule_pdbs(self, output_dir: Path, molecule_name: str, residues: mda.AtomGroup,
+                           contacts: Dict, avg_generic_contacts: np.ndarray,
+                           avg_interest_contacts: np.ndarray, generic_name: str,
+                           interest_name: str):
+        """Write PDB files for a single molecule with different contact information."""
+        def _write_pdb_with_contacts(filename: Path, contact_values: np.ndarray):
+            for i, residue in enumerate(residues.residues):
+                for atom in residue.atoms:
+                    atom.tempfactor = contact_values[i]
+            with PDBWriter(filename) as pdb_writer:
+                pdb_writer.write(residues)
+
+        # Write generic contacts if they exist
+        if len(contacts['generic_contacts']) > 0:
+            _write_pdb_with_contacts(
+                output_dir / f"{molecule_name}_{generic_name}_contacts_{self.config.project}.pdb",
+                contacts['generic_contacts']
+            )
+            _write_pdb_with_contacts(
+                output_dir / f"{interest_name}_{generic_name}_av_contacts_{self.config.project}.pdb",
+                avg_generic_contacts
+            )
+
+        # Write interest contacts
+        _write_pdb_with_contacts(
+            output_dir / f"{molecule_name}_{interest_name}_contacts_{self.config.project}.pdb",
+            contacts['interest_contacts']
+        )
+        _write_pdb_with_contacts(
+            output_dir / f"{interest_name}_{interest_name}_av_contacts_{self.config.project}.pdb",
+            avg_interest_contacts
+        )
 
     def analyze_contacts(self) -> Dict:
         """Analyze residue contacts for all molecules."""
@@ -162,58 +315,6 @@ class ContactAnalysis:
 
         return avg_generic_contacts, avg_interest_contacts
 
-    def export_pdb(self, residue_contacts: Dict, avg_interest_contacts: np.ndarray, 
-                  avg_generic_contacts: np.ndarray):
-        """Export PDB files with contact information in B-factors."""
-        output_dir = Path(self.config.project)
-        generic_name = self.config.generic_molecules.name if self.config.generic_molecules else ""
-        interest_name = self.config.molecules_of_interest.name
-
-        for name_m_interest, (start, end) in self.m_interest_ranges.items():
-            # Create new segment for the molecule
-            new_segment = self.universe.add_Segment(segid=name_m_interest)
-            self.universe.residues[start:end].segments = new_segment
-            residues = self.universe.atoms.select_atoms(f'segid {name_m_interest}')
-
-            self._write_molecule_pdbs(
-                output_dir, name_m_interest, residues, 
-                residue_contacts[name_m_interest], 
-                avg_generic_contacts, avg_interest_contacts,
-                generic_name, interest_name
-            )
-
-    def _write_molecule_pdbs(self, output_dir: Path, molecule_name: str, residues: mda.AtomGroup,
-                           contacts: Dict, avg_generic_contacts: np.ndarray, 
-                           avg_interest_contacts: np.ndarray, generic_name: str, 
-                           interest_name: str):
-        """Write PDB files for a single molecule with different contact information."""
-        def _write_pdb_with_contacts(filename: Path, contact_values: np.ndarray):
-            for i, residue in enumerate(residues.residues):
-                for atom in residue.atoms:
-                    atom.tempfactor = contact_values[i]
-            with PDBWriter(filename) as pdb_writer:
-                pdb_writer.write(residues)
-
-        # Write generic contacts if they exist
-        if len(contacts['generic_contacts']) > 0:
-            _write_pdb_with_contacts(
-                output_dir / f"{molecule_name}_{generic_name}_contacts_{self.config.project}.pdb",
-                contacts['generic_contacts']
-            )
-            _write_pdb_with_contacts(
-                output_dir / f"{interest_name}_{generic_name}_av_contacts_{self.config.project}.pdb",
-                avg_generic_contacts
-            )
-
-        # Write interest contacts
-        _write_pdb_with_contacts(
-            output_dir / f"{molecule_name}_{interest_name}_contacts_{self.config.project}.pdb",
-            contacts['interest_contacts']
-        )
-        _write_pdb_with_contacts(
-            output_dir / f"{interest_name}_{interest_name}_av_contacts_{self.config.project}.pdb",
-            avg_interest_contacts
-        )
 
     def calculate_enrichments(self) -> Tuple[pd.DataFrame, Dict]:
         """Calculate contact enrichments between residues."""
@@ -430,19 +531,53 @@ class ContactAnalysis:
                 print(f"Error writing file {out_path}: {str(e)}")
             finally:
                 plt.close(fig)
+
+
 def load_config(config_path: str) -> Config:
     """Load and parse YAML configuration file."""
     with open(config_path) as f:
         config_data = yaml.safe_load(f)
-    
-    return Config(
-        project=config_data['project'],
-        molecules_of_interest=MoleculeConfig(**config_data['molecules_of_interest']),
-        generic_molecules=MoleculeConfig(**config_data['generic_molecules']) 
-        if 'generic_molecules' in config_data else None
+
+    def _process_chains(chains_data: Dict) -> Dict[str, List[ChainConfig]]:
+        processed_chains = {}
+        for comp_name, chains_list in chains_data.items():
+            processed_chains[comp_name] = [
+                ChainConfig(
+                    chain_id=chain['chain_id'],
+                    atom_range=chain['atom_range']
+                )
+                for chain in chains_list
+            ]
+        return processed_chains
+
+    # Process molecules_of_interest
+    mol_interest = config_data['molecules_of_interest']
+    mol_interest_config = MoleculeConfig(
+        name=mol_interest['name'],
+        components=mol_interest['components'],
+        chains=_process_chains(mol_interest['chains']) if 'chains' in mol_interest else None
     )
 
+    # Process generic_molecules if present
+    generic_mol_config = None
+    if 'generic_molecules' in config_data:
+        generic_mol = config_data['generic_molecules']
+        generic_mol_config = MoleculeConfig(
+            name=generic_mol['name'],
+            components=generic_mol['components'],
+            chains=_process_chains(generic_mol['chains']) if 'chains' in generic_mol else None
+        )
 
+    config = Config(
+        project=config_data['project'],
+        molecules_of_interest=mol_interest_config,
+        generic_molecules=generic_mol_config
+    )
+
+    # Validate chain ranges
+    config.validate_chain_ranges()
+
+    return config
 
 def main():
     if len(sys.argv) != 4:
@@ -457,6 +592,7 @@ def main():
     config = load_config(sys.argv[2])
     universe = mda.Universe(sys.argv[3])
     universe.add_TopologyAttr('tempfactors', range(len(universe.atoms)))
+    universe.add_TopologyAttr('chainIDs', range(len(universe.atoms)))
 
     # Initialize analysis
     analysis = ContactAnalysis(universe, config, contact_matrix)
