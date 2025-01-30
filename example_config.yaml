@@ -1,13 +1,23 @@
+# Project name will be used to create an output directory and for file names
 project: triA_1
-
+# Section specifying molecules of interest
+# Molecules of interest are analysed individually
+# in terms of contacts to each other as well as contacts to generic
+# molecules (specified below)
 molecules_of_interest:
-  name: hcptFAB
+  # name for group of molecules of interest
+  name: protein
+  # Names and atom ranges for different components
   components:
     hcptFAB_1: [1, 6507]
     hcptFAB_2: [6508, 13014]
     hcptFAB_3: [13015, 19521]
     hcptFAB_4: [19522, 26028]
     hcptFAB_5: [26029, 32535]
+  # Chains for different components
+  # important to specify if ordering in the input structure file is
+  # not sequential, to preserve proper bonds and residue order in
+  # visualization, or for easier identifiability
   chains:
     hcptFAB_1:
       - chain_id: "A"
@@ -34,7 +44,8 @@ molecules_of_interest:
         atom_range: [26029, 29278]
       - chain_id: "B"
         atom_range: [29279, 32535]
-
+# Section specifying generic molecules
+# Molecules in this section are not treated individually
 generic_molecules:
   name: triA
   components:

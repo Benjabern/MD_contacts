@@ -21,13 +21,11 @@ class ChainConfig:
     chain_id: str
     atom_range: List[int]
 
-
 @dataclass
 class MoleculeConfig:
     name: str
     components: Dict[str, List[int]]
     chains: Optional[Dict[str, List[ChainConfig]]] = None  # Each component can have multiple chains
-
 
 @dataclass
 class Config:
@@ -86,7 +84,6 @@ class Config:
 
         if errors:
             raise ValueError("Chain validation errors:\n" + "\n".join(errors))
-
 
 class ContactAnalysis:
     def __init__(self, universe: mda.Universe, config: Config, contact_matrix: np.ndarray):
@@ -315,7 +312,6 @@ class ContactAnalysis:
 
         return avg_generic_contacts, avg_interest_contacts
 
-
     def calculate_enrichments(self) -> Tuple[pd.DataFrame, Dict]:
         """Calculate contact enrichments between residues."""
         combination_counts = {}
@@ -421,7 +417,6 @@ class ContactAnalysis:
             print(f"Error writing file {out_path}: {str(e)}")
         finally:
             plt.close(fig)
-
 
     def plot_scale(self):
             """Plot contact scale visualization comparing generic and interest molecules."""
@@ -531,7 +526,6 @@ class ContactAnalysis:
                 print(f"Error writing file {out_path}: {str(e)}")
             finally:
                 plt.close(fig)
-
 
 def load_config(config_path: str) -> Config:
     """Load and parse YAML configuration file."""
