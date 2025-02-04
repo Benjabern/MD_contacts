@@ -116,6 +116,13 @@ class ContactAnalysis:
         for i, residue in enumerate(self.universe.residues, start=1):
             residue.resid = i
 
+    def _get_residue_identifier(self, resid: int) -> str:
+        """Get the original residue number and name for a given residue ID."""
+        residue = self.universe.residues[resid - 1]  # -1 for 0-based indexing
+        original_resid = self.original_resids[resid]
+        resname = residue.resname
+        return f"{original_resid}{resname}"
+
     def _convert_atom_ranges(self) -> Tuple[Dict[str, List[int]], Dict[str, List[int]]]:
         """Convert atom ranges to residue ranges."""
         m_interest_ranges = {}
@@ -186,17 +193,23 @@ class ContactAnalysis:
                 avg_generic_contacts, avg_interest_contacts,
                 generic_name, interest_name
             )
+
     def _write_molecule_pdbs(self, output_dir: Path, molecule_name: str, residues: mda.AtomGroup,
-                           contacts: Dict, avg_generic_contacts: np.ndarray,
-                           avg_interest_contacts: np.ndarray, generic_name: str,
-                           interest_name: str):
-        """Write PDB files for a single molecule with different contact information."""
+                             contacts: Dict, avg_generic_contacts: np.ndarray,
+                             avg_interest_contacts: np.ndarray, generic_name: str,
+                             interest_name: str):
+        """Write PDB files and corresponding text files for a single molecule with contact information."""
+
         def _write_pdb_with_contacts(filename: Path, contact_values: np.ndarray):
             for i, residue in enumerate(residues.residues):
                 for atom in residue.atoms:
                     atom.tempfactor = contact_values[i]
             with PDBWriter(filename) as pdb_writer:
                 pdb_writer.write(residues)
+
+            # Write corresponding text file
+            text_filename = filename.with_suffix('.txt')
+            self._write_contact_text_file(text_filename, contact_values, residues.residues[0].resid)
 
         # Write generic contacts if they exist
         if len(contacts['generic_contacts']) > 0:
@@ -265,52 +278,55 @@ class ContactAnalysis:
         return np.sum(contact_matrix, axis=1) / nframes
 
     def write_results(self, residue_contacts: Dict) -> Tuple[np.ndarray, np.ndarray]:
-        """Write contact results to files and return averages."""
+        """Write analysis results and return average contacts."""
         output_dir = Path(self.config.project)
         output_dir.mkdir(exist_ok=True)
 
-        all_generic_contacts = []
-        all_interest_contacts = []
+        # Calculate average contacts across all molecules of interest
+        avg_interest_contacts = np.zeros(max(len(contacts['interest_contacts'])
+                                             for contacts in residue_contacts.values()))
+        count_interest = np.zeros_like(avg_interest_contacts)
 
-        for m_of_interest, contacts in residue_contacts.items():
-            self._write_contact_file(output_dir, m_of_interest, contacts)
-            
-            if len(contacts['generic_contacts']) > 0:
-                all_generic_contacts.append(contacts['generic_contacts'])
-            all_interest_contacts.append(contacts['interest_contacts'])
+        for contacts in residue_contacts.values():
+            interest_data = contacts['interest_contacts']
+            avg_interest_contacts[:len(interest_data)] += interest_data
+            count_interest[:len(interest_data)] += 1
 
-        return self._write_average_contacts(output_dir, all_generic_contacts, all_interest_contacts)
+        # Avoid division by zero
+        mask = count_interest > 0
+        avg_interest_contacts[mask] /= count_interest[mask]
 
-    def _write_contact_file(self, output_dir: Path, molecule: str, contacts: Dict):
-        """Write contact data for a single molecule."""
-        generic_name = self.config.generic_molecules.name if self.config.generic_molecules else ""
-        interest_name = self.config.molecules_of_interest.name
+        # Calculate average generic contacts if they exist
+        avg_generic_contacts = np.array([])
+        if any(len(contacts['generic_contacts']) > 0 for contacts in residue_contacts.values()):
+            avg_generic_contacts = np.zeros(max(len(contacts['generic_contacts'])
+                                                for contacts in residue_contacts.values()))
+            count_generic = np.zeros_like(avg_generic_contacts)
 
-        if len(contacts['generic_contacts']) > 0:
-            generic_file = output_dir / f"{molecule}_{generic_name}_contacts_{self.config.project}.txt"
-            np.savetxt(generic_file, contacts['generic_contacts'])
+            for contacts in residue_contacts.values():
+                generic_data = contacts['generic_contacts']
+                if len(generic_data) > 0:
+                    avg_generic_contacts[:len(generic_data)] += generic_data
+                    count_generic[:len(generic_data)] += 1
 
-        interest_file = output_dir / f"{molecule}_{interest_name}_contacts_{self.config.project}.txt"
-        np.savetxt(interest_file, contacts['interest_contacts'])
-
-    def _write_average_contacts(self, output_dir: Path, 
-                              generic_contacts: List[np.ndarray], 
-                              interest_contacts: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        """Calculate and write average contacts."""
-        generic_name = self.config.generic_molecules.name if self.config.generic_molecules else ""
-        interest_name = self.config.molecules_of_interest.name
-
-        avg_generic_contacts = np.mean(generic_contacts, axis=0) if generic_contacts else np.array([])
-        avg_interest_contacts = np.mean(interest_contacts, axis=0)
-
-        if len(avg_generic_contacts) > 0:
-            avg_generic_file = output_dir / f"{interest_name}_{generic_name}_av_contacts_{self.config.project}.avg"
-            np.savetxt(avg_generic_file, avg_generic_contacts)
-
-        avg_interest_file = output_dir / f"{interest_name}_{interest_name}_av_contacts_{self.config.project}.avg"
-        np.savetxt(avg_interest_file, avg_interest_contacts)
+            # Avoid division by zero
+            mask = count_generic > 0
+            avg_generic_contacts[mask] /= count_generic[mask]
 
         return avg_generic_contacts, avg_interest_contacts
+
+    def _write_contact_text_file(self, filename: Path, contact_values: np.ndarray,
+                               start_resid: int):
+        """Write contact data to a text file with index, value, and residue identifier."""
+        with open(filename, 'w') as f:
+            f.write("@    title \"Contacts profile\"\n")
+            f.write("@    yaxis  label \"Contact Frequency\"\n")
+            f.write("@    xaxis  label \"Residue\"\n")
+            f.write("@TYPE xy\n")
+            for i, value in enumerate(contact_values, 1):
+                residue_id = self._get_residue_identifier(start_resid + i)
+                f.write(f"{i}\t{value:.3f}\t{residue_id}\n")
+
 
     def calculate_enrichments(self) -> Tuple[pd.DataFrame, Dict]:
         """Calculate contact enrichments between residues."""
