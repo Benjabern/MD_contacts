@@ -324,7 +324,7 @@ class ContactAnalysis:
             f.write("@    xaxis  label \"Residue\"\n")
             f.write("@TYPE xy\n")
             for i, value in enumerate(contact_values, 1):
-                residue_id = self._get_residue_identifier(start_resid + i)
+                residue_id = self._get_residue_identifier(start_resid-1 + i)
                 f.write(f"{i}\t{value:.3f}\t{residue_id}\n")
 
 
@@ -428,7 +428,6 @@ class ContactAnalysis:
         
         try:
             fig.savefig(out_path)
-            print(f"File {out_path} created")
         except Exception as e:
             print(f"Error writing file {out_path}: {str(e)}")
         finally:
@@ -537,7 +536,6 @@ class ContactAnalysis:
 
             try:
                 fig.savefig(out_path)
-                print(f"File {out_path} created")
             except Exception as e:
                 print(f"Error writing file {out_path}: {str(e)}")
             finally:
@@ -588,36 +586,3 @@ def load_config(config_path: str) -> Config:
     config.validate_chain_ranges()
 
     return config
-
-def main():
-    if len(sys.argv) != 4:
-        print("Usage: python script.py <contacts.json> <config.yaml> <structure.pdb>")
-        sys.exit(1)
-
-    # Load input data
-    with open(sys.argv[1]) as f:
-        contacts = json.load(f)
-    contact_matrix = np.array(contacts['map'], dtype=int)
-    
-    config = load_config(sys.argv[2])
-    universe = mda.Universe(sys.argv[3])
-    universe.add_TopologyAttr('tempfactors', range(len(universe.atoms)))
-    universe.add_TopologyAttr('chainIDs', range(len(universe.atoms)))
-
-    # Initialize analysis
-    analysis = ContactAnalysis(universe, config, contact_matrix)
-    
-    # Perform analysis
-    residue_contacts = analysis.analyze_contacts()
-    avg_generic_contacts, avg_interest_contacts = analysis.write_results(residue_contacts)
-    
-    # Export PDB files
-    analysis.export_pdb(residue_contacts, avg_interest_contacts, avg_generic_contacts)
-    
-    # Generate visualizations
-    enrichment_matrix, _ = analysis.calculate_enrichments()
-    analysis.plot_enrichments(enrichment_matrix)
-    analysis.plot_scale()
-
-if __name__ == "__main__":
-    main()

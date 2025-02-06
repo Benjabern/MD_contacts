@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "md_contact_analysis"
+version = "0.1.0"
+description = "Molecular Dynamics Contact Analysis Suite"
+authors = [
+    {name = "Benjamin Benrieder", email = "benjamin.bernrieder@univie.ac.at"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "MDAnalysis>=2.0.0",
+    "numpy>=1.20.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "pandas>=1.3.0",
+    "pyyaml>=5.4.0"
+]
+
+[project.scripts]
+md_contacts = "md_contact_analysis.cli:main"
+
+[tool.setuptools]
+packages = ["md_contact_analysis"]
