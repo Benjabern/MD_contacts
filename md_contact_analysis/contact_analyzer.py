@@ -325,7 +325,7 @@ class ContactAnalysis:
             f.write("@TYPE xy\n")
             for i, value in enumerate(contact_values, 1):
                 residue_id = self._get_residue_identifier(start_resid-1 + i)
-                f.write(f"{i}\t{value:.3f}\t{residue_id}\n")
+                f.write(f"{i}\t{value:.3f}\t\"{residue_id}\"\n")
 
 
     def calculate_enrichments(self) -> Tuple[pd.DataFrame, Dict]:
