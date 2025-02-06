@@ -1,4 +1,3 @@
-import argparse
 import json
 import logging
 import multiprocessing as mp
@@ -7,9 +6,7 @@ import sys
 import time
 import traceback
 from datetime import datetime
-from pathlib import Path
 
-import MDAnalysis as mda
 import numpy as np
 from MDAnalysis.analysis.distances import distance_array
 
@@ -61,8 +58,7 @@ def analyze_frame(args):
         universe.trajectory[frame_index]
         groups = [universe.atoms[indices] for indices in res_indices]
         dimensions = universe.dimensions
-        frame_min_dist = np.zeros((n_groups, n_groups))    
-        
+        frame_min_dist = np.zeros((n_groups, n_groups))
         # Calculate distance arrays for all group pairs
         dist_arrays = []
         for i in range(n_groups):
@@ -153,11 +149,7 @@ def run_contact_calculation(
             
             end_time = time.time()
             logging.info(f"Chunk computation time: {end_time-start_time:.2f} seconds")
-    
-    # Add total number of frames as the first element
-    total_contacts = np.insert(total_contacts, 0, n_frames, axis=0)
-    total_contacts = np.insert(total_contacts, 0, n_frames, axis=1)
-    
+
     return total_contacts
 
 def write_contact_matrix(results, output_file, universe):
@@ -172,19 +164,21 @@ def write_contact_matrix(results, output_file, universe):
     try:
         # Get unique residue names and numbers
         residue_names = [res.resname for res in universe.residues]
-        residue_numbers = [res.resid for res in universe.residues]
-        
-        names = ["frame_count"] + residue_names
-        real_numbers = [0] + residue_numbers
-        
+        residue_numbers = [int(res.resid) for res in universe.residues]
+
+        names = residue_names
+        real_numbers = residue_numbers
+        #results = np.array(results, dtype=int)
         cmap = results.tolist()
+        nres = int(len(cmap))
+
         out_dict = {
-            'NResidues': len(cmap) - 1, 
+            'NResidues': nres,
             'map': cmap, 
-            'real_numbers': real_numbers, 
+            'real_numbers': real_numbers,
             'names': names
         }
-    
+
         with open(output_file, "w") as json_file:
             json.dump(out_dict, json_file)
         
