@@ -27,25 +27,25 @@ def main():
     # Common arguments
     parser.add_argument('-s', '--structure', required=True,
                         help='Input structure file (.gro, .pdb)')
-    parser.add_argument('-o', '--output', default='output',
-                        help='Output directory/file path')
     parser.add_argument('--log', help='Log file path')
 
     # Contact generation arguments
-    contact_gen_group = parser.add_argument_group('Contact Generation')
-    contact_gen_group.add_argument('-f', '--trajectory',
+    contact_calc_group = parser.add_argument_group('Contact Generation')
+    contact_calc_group.add_argument('-f', '--trajectory',
                                    help='Input trajectory file (.xtc)')
-    contact_gen_group.add_argument('--cutoff', type=float, default=3.5,
+    contact_calc_group.add_argument('-o', '--output', default='contacts.json',
+                        help='Output directory/file path')
+    contact_calc_group.add_argument('--cutoff', type=float, default=3.5,
                                    help='Distance cutoff for contacts in Angstrom')
-    contact_gen_group.add_argument('-j', '--jobs', type=int, default=16,
+    contact_calc_group.add_argument('-j', '--jobs', type=int, default=16,
                                    help='Number of parallel jobs')
-    contact_gen_group.add_argument('--chunk-size', type=int, default=1000,
+    contact_calc_group.add_argument('--chunk-size', type=int, default=1000,
                                    help='Number of frames to process in each chunk')
-    contact_gen_group.add_argument('-b', '--begin', type=int,
+    contact_calc_group.add_argument('-b', '--begin', type=int,
                                    help='Starting frame for analysis')
-    contact_gen_group.add_argument('-e', '--end', type=int,
+    contact_calc_group.add_argument('-e', '--end', type=int,
                                    help='End frame for analysis')
-    contact_gen_group.add_argument('-df', '--step', type=int,
+    contact_calc_group.add_argument('-df', '--step', type=int,
                                    help='Frame step for analysis')
 
     # Contact analysis arguments
@@ -81,7 +81,7 @@ def main():
             )
 
             # Write contact matrix
-            contacts_path = Path(args.output) / 'contacts.json'
+            contacts_path = Path(args.output)
             write_contact_matrix(contact_matrix, contacts_path, universe)
 
         elif args.mode == 'analyze':
