@@ -4,7 +4,11 @@ A comprehensive tool for molecular dynamics contact analysis.
 
 ## Installation
 
+
+
 ```bash
+git clone https://github.com/Benjabern/MD_contacts
+cd MD_contacts/
 pip install .
 ```
 
