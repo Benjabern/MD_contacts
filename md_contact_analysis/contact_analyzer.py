@@ -167,7 +167,6 @@ class ContactAnalysis:
 
         # Create a copy of the universe to preserve original residue IDs
         temp_universe = self.universe.copy()
-
         # Restore original residue IDs
         for residue in temp_universe.residues:
             residue.resid = self.original_resids[residue.resid]
@@ -177,7 +176,6 @@ class ContactAnalysis:
             new_segment = temp_universe.add_Segment(segid=name_m_interest)
             residues = temp_universe.residues[start:end]
             residues.segments = new_segment
-
             # Get the atom indices for this component
             component_range = self.config.molecules_of_interest.components[name_m_interest]
             start_idx = component_range[0] - 1
@@ -191,15 +189,14 @@ class ContactAnalysis:
                 output_dir, name_m_interest, residues,
                 residue_contacts[name_m_interest],
                 avg_generic_contacts, avg_interest_contacts,
-                generic_name, interest_name
+                generic_name, interest_name, start
             )
 
     def _write_molecule_pdbs(self, output_dir: Path, molecule_name: str, residues: mda.AtomGroup,
                              contacts: Dict, avg_generic_contacts: np.ndarray,
                              avg_interest_contacts: np.ndarray, generic_name: str,
-                             interest_name: str):
+                             interest_name: str, start: int):
         """Write PDB files and corresponding text files for a single molecule with contact information."""
-
         def _write_pdb_with_contacts(filename: Path, contact_values: np.ndarray):
             for i, residue in enumerate(residues.residues):
                 for atom in residue.atoms:
@@ -209,7 +206,7 @@ class ContactAnalysis:
 
             # Write corresponding text file
             text_filename = filename.with_suffix('.txt')
-            self._write_contact_text_file(text_filename, contact_values, residues.residues[0].resid)
+            self._write_contact_text_file(text_filename, contact_values, start)
 
         # Write generic contacts if they exist
         if len(contacts['generic_contacts']) > 0:
@@ -324,7 +321,7 @@ class ContactAnalysis:
             f.write("@    xaxis  label \"Residue\"\n")
             f.write("@TYPE xy\n")
             for i, value in enumerate(contact_values, 1):
-                residue_id = self._get_residue_identifier(start_resid-1 + i)
+                residue_id = self._get_residue_identifier(start_resid + i)
                 f.write(f"{i}\t{value:.3f}\t\"{residue_id}\"\n")
 
 
