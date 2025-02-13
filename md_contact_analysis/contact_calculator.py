@@ -84,6 +84,31 @@ def analyze_frame(args):
         logging.error(traceback.format_exc())
         return None
 
+
+def frame_analysis(matrix, row_start=None, row_end=None, col_start=None, col_end=None):
+    """
+    Count rows that contain at least one 1 in the specified range.
+    Uses numpy operations for maximum performance.
+
+    Args:
+        matrix: 2D numpy array or list of lists
+        row_start: Starting row index (inclusive), defaults to 0
+        row_end: Ending row index (exclusive), defaults to matrix height
+        col_start: Starting column index (inclusive), defaults to 0
+        col_end: Ending column index (exclusive), defaults to matrix width
+
+    Returns:
+        int: Number of rows containing at least one 1
+    """
+
+    # Slice matrix to specified range
+    submatrix = matrix[row_start:row_end, col_start:col_end]
+
+    with open('test.txt', "a") as out:
+        out.write(f'{np.any(submatrix > 0, axis=1).sum()}\n')
+
+
+
 def run_contact_calculation(
     universe, 
     cutoff: float = 3.5, 
@@ -145,6 +170,7 @@ def run_contact_calculation(
             # Sum valid results, skipping None values
             for result in chunk_results:
                 if result is not None:
+                    frame_analysis(result, row_start=2170, row_end=2290, col_start=0, col_end=2170)
                     total_contacts += result
             
             end_time = time.time()
@@ -168,7 +194,6 @@ def write_contact_matrix(results, output_file, universe):
 
         names = residue_names
         real_numbers = residue_numbers
-        #results = np.array(results, dtype=int)
         cmap = results.tolist()
         nres = int(len(cmap))
 
