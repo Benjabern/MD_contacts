@@ -108,19 +108,18 @@ def frame_analysis(matrix, row_start=None, row_end=None, col_start=None, col_end
         out.write(f'{np.any(submatrix == 1, axis=1).sum()}\n')
 
 
-
 def run_contact_calculation(
-    universe, 
-    cutoff: float = 3.5, 
-    n_jobs: int = 16, 
-    start_frame: int = None, 
-    end_frame: int = None, 
-    step: int = None,
-    chunk_size: int = 1000
+        universe,
+        cutoff: float = 3.5,
+        n_jobs: int = 16,
+        start_frame: int = None,
+        end_frame: int = None,
+        step: int = None,
+        chunk_size: int = 1000
 ):
     """
     Generate contact matrix for molecular dynamics trajectory
-    
+
     Args:
         universe: MDAnalysis Universe object
         cutoff: Distance cutoff for contacts in Angstrom
@@ -129,7 +128,7 @@ def run_contact_calculation(
         end_frame: Ending frame for analysis
         step: Frame step for analysis
         chunk_size: Number of frames to process in each chunk
-    
+
     Returns:
         Contact matrix
     """
@@ -147,34 +146,36 @@ def run_contact_calculation(
         logging.error("No frames to analyze with current slice parameters")
         return None
 
-    # Use residue indices 
+    # Use residue indices
     res_indices = [res.atoms.indices for res in universe.residues]
     total_contacts = np.zeros((len(res_indices), len(res_indices)))
-    
+
     # Process frames in chunks
-    for start_frame in range(0, n_frames, chunk_size):
-        end_frame = min(start_frame + chunk_size, n_frames)
-        chunk_frames = list(range(start_frame, end_frame))
-        
-        logging.info(f"Processing frames {start_frame} to {end_frame}")
-        
+    for chunk_start_idx in range(0, n_frames, chunk_size):
+        chunk_end_idx = min(chunk_start_idx + chunk_size, n_frames)
+        # Get the actual frame numbers for this chunk from frame_indices
+        chunk_frame_numbers = frame_indices[chunk_start_idx:chunk_end_idx]
+
+        logging.info(f"Processing frames {chunk_frame_numbers[0]} to {chunk_frame_numbers[-1]}")
+
         with mp.Pool(processes=n_jobs) as pool:
             start_time = time.time()
-            
-            # Prepare arguments for pool.starmap
-            chunk_args = [(universe, frame, cutoff, res_indices) for frame in chunk_frames]
-            
+
+            # Prepare arguments for pool.starmap using actual frame numbers
+            chunk_args = [(universe, frame_num, cutoff, res_indices)
+                          for frame_num in chunk_frame_numbers]
+
             # Process chunk in parallel
             chunk_results = pool.map(analyze_frame, chunk_args)
-            
+
             # Sum valid results, skipping None values
             for result in chunk_results:
                 if result is not None:
                     frame_analysis(result, row_start=2170, row_end=2276, col_start=0, col_end=2170)
                     total_contacts += result
-            
+
             end_time = time.time()
-            logging.info(f"Chunk computation time: {end_time-start_time:.2f} seconds")
+            logging.info(f"Chunk computation time: {end_time - start_time:.2f} seconds")
 
     return total_contacts
 
