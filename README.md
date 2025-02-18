@@ -21,5 +21,5 @@ md_contacts calculate -s structure.gro -f trajectory.xtc -o contact_map.json
 
 ### Analyze Contacts
 ```bash
-md-contacts analyze -s structure.gro -c config.yaml -m contact_map.json
+md_contacts analyze -s structure.gro -c config.yaml -m contact_map.json
 ```
