@@ -104,7 +104,7 @@ def frame_analysis(matrix, row_start=None, row_end=None, col_start=None, col_end
     # Slice matrix to specified range
     submatrix = matrix[row_start:row_end, col_start:col_end]
 
-    with open('test.txt', "a") as out:
+    with open('time_res.xvg', "a") as out:
         out.write(f'{np.any(submatrix == 1, axis=1).sum()}\n')
 
 
@@ -171,7 +171,7 @@ def run_contact_calculation(
             # Sum valid results, skipping None values
             for result in chunk_results:
                 if result is not None:
-                    frame_analysis(result, row_start=2170, row_end=2276, col_start=0, col_end=2170)
+                    frame_analysis(result, row_start=2170, row_end=2291, col_start=0, col_end=2170)
                     total_contacts += result
 
             end_time = time.time()
