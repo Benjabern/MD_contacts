@@ -1,8 +1,6 @@
-import json
-import sys
 import warnings
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Set, Union
+from typing import Dict, List, Tuple, Optional
 
 import MDAnalysis as mda
 import matplotlib.pyplot as plt
@@ -10,6 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import yaml
+import freesasa
 from MDAnalysis.coordinates.PDB import PDBWriter
 from dataclasses import dataclass
 
@@ -93,7 +92,23 @@ class ContactAnalysis:
         self.seq = self._clean_sequence()
         self.original_resids = self._store_original_resids()
         self._renumber_residues()
+        self.sasa_list = self._calc_sasa()
         self.m_interest_ranges, self.m_generic_ranges = self._convert_atom_ranges()
+
+    def _calc_sasa(self):
+        structure = freesasa.Structure()
+        freesasa.setVerbosity(1)
+        for a in self.universe.atoms:
+            x, y, z = a.position
+            resname = a.resname
+            structure.addAtom(a.type.rjust(2), resname, a.resid.item(), a.segid, x, y, z)
+
+        parameters = freesasa.Parameters()
+        result = freesasa.calc(structure, parameters)
+        residue_areas = [result.residueAreas()[s][r] for s in list(result.residueAreas().keys()) for r in
+                         list(result.residueAreas()[s].keys())]
+        sasa_list = [r.total for r in residue_areas]
+        return sasa_list
 
     def _store_original_resids(self) -> Dict[int, int]:
         """Store mapping between sequential and original residue IDs."""
@@ -325,23 +340,23 @@ class ContactAnalysis:
                 f.write(f"{i}\t{value:.3f}\t\"{residue_id}\"\n")
 
 
-    def calculate_enrichments(self) -> Tuple[pd.DataFrame, Dict]:
-        """Calculate contact enrichments between residues."""
+    def enrichment(self) -> Tuple[pd.DataFrame, Dict]:
+        """Calculate contact enrichments between residue types in molecules of interest group."""
         combination_counts = {}
         total_contacts = 0
         total_pairs = 0
-
         # Collect contact data
         for m_of_interest, (p_start, p_end) in self.m_interest_ranges.items():
             matrix_data = self._get_contact_matrix_for_molecule(m_of_interest, p_start, p_end)
             if matrix_data is None:
                 continue
 
-            p_mat, rlabels, clabels = matrix_data
+            p_mat, rlabels, clabels, row_indices, col_indices = matrix_data
             total_pairs += len(rlabels) * len(clabels)
             total_contacts += np.sum(p_mat)
 
-            self._update_combination_counts(combination_counts, p_mat, rlabels, clabels)
+            self._update_combination_counts(combination_counts, p_mat, rlabels, clabels,
+                                            row_indices, col_indices)
 
         # Calculate enrichment matrix
         enrichment_matrix = self._calculate_enrichment_matrix(
@@ -350,7 +365,7 @@ class ContactAnalysis:
         return enrichment_matrix, combination_counts
 
     def _get_contact_matrix_for_molecule(self, m_of_interest: str, p_start: int, p_end: int) -> Optional[Tuple]:
-        """Get contact matrix and labels for a molecule."""
+        """Get contact matrix and labels for a molecule of interest."""
         other_m_of_interest = [p for p in self.m_interest_ranges.keys() if p != m_of_interest]
         other_ranges = [self.m_interest_ranges[p] for p in other_m_of_interest]
 
@@ -361,36 +376,54 @@ class ContactAnalysis:
             p_mat = self.contact_matrix[p_start:p_end, interest_columns]
             rlabels = self.seq[p_start:p_end]
             clabels = self.seq[interest_columns]
+            row_indices = np.arange(p_start, p_end)
+            col_indices = interest_columns
         else:
             p_mat = self.contact_matrix[p_start:p_end, p_start:p_end]
             rlabels = self.seq[p_start:p_end]
             clabels = self.seq[p_start:p_end]
+            row_indices = np.arange(p_start, p_end)
+            col_indices = np.arange(p_start, p_end)
 
-        return p_mat, rlabels, clabels
+        return p_mat, rlabels, clabels, row_indices, col_indices
 
     def _update_combination_counts(self, combination_counts: Dict, 
                                  contact_matrix: np.ndarray,
                                  row_labels: np.ndarray, 
-                                 col_labels: np.ndarray):
-        """Update combination counts dictionary with contact data."""
+                                 col_labels: np.ndarray,
+                                 row_indices: np.ndarray,
+                                 col_indices: np.ndarray):
+        """Update combination counts dictionary with contact data for contacts between molecules of interest."""
+        total_row_sasa = sum(np.array(self.sasa_list)[row_indices])
+        total_col_sasa = sum(np.array(self.sasa_list)[col_indices])
+        sasa_interest = total_col_sasa + total_row_sasa
+
         for i, row_label in enumerate(row_labels):
+            row_idx = row_indices[i]  # Get the actual index in the original sequence
             for j, col_label in enumerate(col_labels):
+                col_idx = col_indices[j]  # Get the actual index in the original sequence
                 combination = frozenset([row_label, col_label])
                 count = contact_matrix[i, j]
-                
+
+                # Sum of corresponding values from the value list
+                #sasa_fraction_product = (self.sasa_list[row_idx]/sasa_interest) * (self.sasa_list[col_idx]/sasa_interest)
+                sasa_fraction_product = (self.sasa_list[row_idx]/total_row_sasa) * (self.sasa_list[col_idx]/total_col_sasa)
+
                 if combination not in combination_counts:
                     combination_counts[combination] = {
                         'total_count': 0,
-                        'occurrences': 0
+                        'occurrences': 0,
+                        'total_sasa': 0
                     }
                 
                 combination_counts[combination]['total_count'] += count
                 combination_counts[combination]['occurrences'] += 1
+                combination_counts[combination]['total_sasa'] += sasa_fraction_product
 
     def _calculate_enrichment_matrix(self, combination_counts: Dict, 
                                    total_contacts: int, 
                                    total_pairs: int) -> pd.DataFrame:
-        """Calculate enrichment matrix from combination counts."""
+        """Calculate enrichment matrix from combination counts for contacts between molecules of interest."""
         # Extract unique labels
         labels = sorted({label for key in combination_counts.keys() for label in key})
         label_index = {label: i for i, label in enumerate(labels)}
@@ -402,7 +435,8 @@ class ContactAnalysis:
         # Fill matrix
         for combination, values in combination_counts.items():
             if values['occurrences'] > 0 and total_contacts > 0:
-                value = (values['total_count'] / total_contacts) / (values['occurrences'] / total_pairs)
+                value = (values['total_count'] / total_contacts) / values['total_sasa']
+                #value = (values['total_count'] / total_contacts) / (values['occurrences'] / total_pairs)
             else:
                 value = 0
                 
@@ -415,12 +449,12 @@ class ContactAnalysis:
         return pd.DataFrame(data=matrix[::-1, :], index=labels[::-1], columns=labels)
 
     def plot_enrichments(self, enrichment_matrix: pd.DataFrame):
-        """Plot contact enrichment heatmap."""
+        """Plot contact enrichment heatmap for contacts between molecules of interest ."""
         output_dir = Path(self.config.project)
         out_path = output_dir / f'{self.config.molecules_of_interest.name}_c_enrichments_{self.config.project}.pdf'
         
         fig, ax = plt.subplots(figsize=(10, 10), constrained_layout=True)
-        sns.heatmap(enrichment_matrix, annot=False, cmap="coolwarm", vmin=0, center=1)
+        sns.heatmap(enrichment_matrix, annot=False, cmap="coolwarm")#, vmin=0, center=1)
         plt.title('Contacts enrichment matrix', fontsize=20)
         
         try:
@@ -430,11 +464,10 @@ class ContactAnalysis:
         finally:
             plt.close(fig)
 
-    def plot_scale(self):
-            """Plot contact scale visualization comparing generic and interest molecules."""
+    def generic_enrichment(self):
+            """Calculates, plots and writes to text, a scale of contact enrichment between all residues in the molecule of interest group and the generic group"""
             if not self.m_generic_ranges:
                 return
-
             output_dir = Path(self.config.project)
             out_path = output_dir / f'{self.config.project}_scale.png'
             out_path_txt = output_dir / f'{self.config.project}_scale.txt'
@@ -464,24 +497,37 @@ class ContactAnalysis:
                 p_mat = self.contact_matrix[p_start:p_end, generic_columns]
                 rlabels = self.seq[p_start:p_end]
                 clabels = self.seq[generic_columns]
-
+                row_indices = np.arange(p_start, p_end)
+                col_indices = generic_columns
                 total_pairs += len(rlabels) * len(clabels)
                 total_contacts += np.sum(p_mat)
 
+                total_row_sasa = sum(np.array(self.sasa_list)[row_indices])
+                total_col_sasa = sum(np.array(self.sasa_list)[col_indices])
+
+                sasa_interest = total_col_sasa+total_row_sasa
+
                 # Update combination counts
                 for i, row_label in enumerate(rlabels):
+                    row_idx = row_indices[i]
                     for j, col_label in enumerate(clabels):
+                        col_idx = col_indices[j]
                         combination = frozenset([row_label, col_label])
                         count = p_mat[i, j]
+
+                        #sasa_fraction_product = (self.sasa_list[row_idx] / sasa_interest) * (self.sasa_list[col_idx] / sasa_interest)
+                        sasa_fraction_product = (self.sasa_list[row_idx] / total_row_sasa) * (self.sasa_list[col_idx] / total_col_sasa)
 
                         if combination not in combination_counts:
                             combination_counts[combination] = {
                                 'total_count': 0,
-                                'occurrences': 0
+                                'occurrences': 0,
+                                'total_sasa': 0
                             }
 
                         combination_counts[combination]['total_count'] += count
                         combination_counts[combination]['occurrences'] += 1
+                        combination_counts[combination]['total_sasa'] += sasa_fraction_product
 
             # Create enrichment matrix
             all_residues = sorted(generic_residues | interest_residues)
@@ -491,7 +537,8 @@ class ContactAnalysis:
 
             for combination, values in combination_counts.items():
                 if values['occurrences'] > 0 and total_contacts > 0:
-                    value = (values['total_count'] / total_contacts) / (values['occurrences'] / total_pairs)
+                    value = (values['total_count'] / total_contacts) / values['total_sasa']
+                    #value = (values['total_count'] / total_contacts) / (values['occurrences'] / total_pairs)
                 else:
                     value = 0
 
@@ -523,11 +570,10 @@ class ContactAnalysis:
             sns.heatmap(filtered_matrix,
                        annot=False,
                        cmap="coolwarm",
-                       vmin=0,
-                       center=1,
                        ax=ax,
                        xticklabels=True,
-                       yticklabels=True)
+                       yticklabels=True,
+                       )#vmin=0,center=1)
 
             plt.xticks(rotation=45, ha='right')
 

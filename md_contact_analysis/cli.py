@@ -11,6 +11,7 @@ from .contact_calculator import run_contact_calculation, write_contact_matrix, s
 from .contact_analyzer import load_config, ContactAnalysis
 
 
+
 def main():
     """
     Main function to run the molecular dynamics contact analysis suite
@@ -114,9 +115,9 @@ def main():
             logger.info("structure files export complete")
 
             # Generate visualizations
-            enrichment_matrix, _ = analysis.calculate_enrichments()
+            enrichment_matrix, _ = analysis.enrichment()
             analysis.plot_enrichments(enrichment_matrix)
-            analysis.plot_scale()
+            analysis.generic_enrichment()
             logger.info("visualizations complete")
             logger.info("contact analysis complete")
 
