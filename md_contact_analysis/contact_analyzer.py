@@ -1,3 +1,4 @@
+import math
 import warnings
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
@@ -340,7 +341,7 @@ class ContactAnalysis:
                 f.write(f"{i}\t{value:.3f}\t\"{residue_id}\"\n")
 
 
-    def enrichment(self) -> Tuple[pd.DataFrame, Dict]:
+    def sasa_norm_enrichment(self) -> Tuple[pd.DataFrame, Dict]:
         """Calculate contact enrichments between residue types in molecules of interest group."""
         combination_counts = {}
         total_contacts = 0
@@ -396,7 +397,7 @@ class ContactAnalysis:
         """Update combination counts dictionary with contact data for contacts between molecules of interest."""
         total_row_sasa = sum(np.array(self.sasa_list)[row_indices])
         total_col_sasa = sum(np.array(self.sasa_list)[col_indices])
-        sasa_interest = total_col_sasa + total_row_sasa
+        sasa_interest = total_row_sasa + total_col_sasa
 
         for i, row_label in enumerate(row_labels):
             row_idx = row_indices[i]  # Get the actual index in the original sequence
@@ -405,25 +406,25 @@ class ContactAnalysis:
                 combination = frozenset([row_label, col_label])
                 count = contact_matrix[i, j]
 
-                # Sum of corresponding values from the value list
-                #sasa_fraction_product = (self.sasa_list[row_idx]/sasa_interest) * (self.sasa_list[col_idx]/sasa_interest)
-                sasa_fraction_product = (self.sasa_list[row_idx]/total_row_sasa) * (self.sasa_list[col_idx]/total_col_sasa)
+                # Get product of Residue SASA for every residue pair
+                sasa_product = ((self.sasa_list[row_idx] * self.sasa_list[col_idx])/((sasa_interest-total_row_sasa)*sasa_interest))
+
 
                 if combination not in combination_counts:
                     combination_counts[combination] = {
                         'total_count': 0,
                         'occurrences': 0,
-                        'total_sasa': 0
+                        'sasa_norm': 0
                     }
                 
                 combination_counts[combination]['total_count'] += count
                 combination_counts[combination]['occurrences'] += 1
-                combination_counts[combination]['total_sasa'] += sasa_fraction_product
+                combination_counts[combination]['sasa_norm'] += sasa_product
 
     def _calculate_enrichment_matrix(self, combination_counts: Dict, 
                                    total_contacts: int, 
                                    total_pairs: int) -> pd.DataFrame:
-        """Calculate enrichment matrix from combination counts for contacts between molecules of interest."""
+        """Calculate sasa normalized enrichment matrix between residues in molecules of interest from combination count dictionary."""
         # Extract unique labels
         labels = sorted({label for key in combination_counts.keys() for label in key})
         label_index = {label: i for i, label in enumerate(labels)}
@@ -435,8 +436,7 @@ class ContactAnalysis:
         # Fill matrix
         for combination, values in combination_counts.items():
             if values['occurrences'] > 0 and total_contacts > 0:
-                value = (values['total_count'] / total_contacts) / values['total_sasa']
-                #value = (values['total_count'] / total_contacts) / (values['occurrences'] / total_pairs)
+                value = (values['total_count'] / total_contacts) / values['sasa_norm']
             else:
                 value = 0
                 
@@ -449,12 +449,12 @@ class ContactAnalysis:
         return pd.DataFrame(data=matrix[::-1, :], index=labels[::-1], columns=labels)
 
     def plot_enrichments(self, enrichment_matrix: pd.DataFrame):
-        """Plot contact enrichment heatmap for contacts between molecules of interest ."""
+        """Plot heatmap for sasa normalized enrichments between residues in molecules of interest."""
         output_dir = Path(self.config.project)
         out_path = output_dir / f'{self.config.molecules_of_interest.name}_c_enrichments_{self.config.project}.pdf'
         
         fig, ax = plt.subplots(figsize=(10, 10), constrained_layout=True)
-        sns.heatmap(enrichment_matrix, annot=False, cmap="coolwarm")#, vmin=0, center=1)
+        sns.heatmap(enrichment_matrix, annot=False, cmap="coolwarm", vmin=0, center=1)
         plt.title('Contacts enrichment matrix', fontsize=20)
         
         try:
@@ -464,12 +464,13 @@ class ContactAnalysis:
         finally:
             plt.close(fig)
 
-    def generic_enrichment(self):
-            """Calculates, plots and writes to text, a scale of contact enrichment between all residues in the molecule of interest group and the generic group"""
+
+    def sasa_norm_generic_propensity(self):
+            """Calculates, plots and writes to text, solvent exposure normalized propensities between all residues in the molecule of interest group and the generic group"""
             if not self.m_generic_ranges:
                 return
             output_dir = Path(self.config.project)
-            out_path = output_dir / f'{self.config.project}_scale.png'
+            out_path = output_dir / f'{self.config.project}_propensity.png'
             out_path_txt = output_dir / f'{self.config.project}_scale.txt'
 
             # Calculate contacts and collect sequences
@@ -480,7 +481,7 @@ class ContactAnalysis:
             # Get sequences for generic molecules and molecules of interest
             generic_residues = set()
             interest_residues = set()
-
+            sasa_interest = 0
             # Collect generic residues
             for _, (start, end) in self.m_generic_ranges.items():
                 generic_residues.update(self.seq[start:end])
@@ -505,7 +506,8 @@ class ContactAnalysis:
                 total_row_sasa = sum(np.array(self.sasa_list)[row_indices])
                 total_col_sasa = sum(np.array(self.sasa_list)[col_indices])
 
-                sasa_interest = total_col_sasa+total_row_sasa
+                sasa_interest += total_row_sasa
+                sasa_generic = total_col_sasa
 
                 # Update combination counts
                 for i, row_label in enumerate(rlabels):
@@ -515,8 +517,8 @@ class ContactAnalysis:
                         combination = frozenset([row_label, col_label])
                         count = p_mat[i, j]
 
-                        #sasa_fraction_product = (self.sasa_list[row_idx] / sasa_interest) * (self.sasa_list[col_idx] / sasa_interest)
-                        sasa_fraction_product = (self.sasa_list[row_idx] / total_row_sasa) * (self.sasa_list[col_idx] / total_col_sasa)
+                        # Get product of Residue SASA for every residue pair
+                        sasa_product = self.sasa_list[row_idx] * self.sasa_list[col_idx]
 
                         if combination not in combination_counts:
                             combination_counts[combination] = {
@@ -527,26 +529,29 @@ class ContactAnalysis:
 
                         combination_counts[combination]['total_count'] += count
                         combination_counts[combination]['occurrences'] += 1
-                        combination_counts[combination]['total_sasa'] += sasa_fraction_product
+                        combination_counts[combination]['total_sasa'] += sasa_product
 
-            # Create enrichment matrix
+            # Create sasa normalized enrichment matrix
             all_residues = sorted(generic_residues | interest_residues)
             matrix_size = len(all_residues)
             enrichment_matrix = np.zeros((matrix_size, matrix_size))
+            enrichment_matrix_log = np.zeros((matrix_size, matrix_size))
             residue_to_index = {res: idx for idx, res in enumerate(all_residues)}
 
             for combination, values in combination_counts.items():
                 if values['occurrences'] > 0 and total_contacts > 0:
-                    value = (values['total_count'] / total_contacts) / values['total_sasa']
-                    #value = (values['total_count'] / total_contacts) / (values['occurrences'] / total_pairs)
+                    value = (values['total_count'] / total_contacts) / (values['total_sasa']/(sasa_interest*sasa_generic))
+                    log_value = -1 * (math.log(value))
                 else:
                     value = 0
+                    log_value = 0
 
                 for res1 in combination:
                     for res2 in combination:
                         idx1 = residue_to_index[res1]
                         idx2 = residue_to_index[res2]
                         enrichment_matrix[idx1, idx2] = value
+                        enrichment_matrix_log[idx1, idx2] = log_value
 
             # Create DataFrames for the full matrix
             enrichment_df = pd.DataFrame(
@@ -554,14 +559,16 @@ class ContactAnalysis:
                 index=all_residues,
                 columns=all_residues
             )
-
+            enrichment_df_ln = pd.DataFrame(
+                enrichment_matrix_log,
+                index=all_residues,
+                columns=all_residues
+            )
             # Filter matrix to show only generic vs interest interactions
             generic_residues = sorted(generic_residues)
             interest_residues = sorted(interest_residues)
             filtered_matrix = enrichment_df.loc[generic_residues, interest_residues]
-
-            # Save numerical data
-            filtered_matrix.to_csv(out_path_txt, sep=' ', mode='a')
+            filtered_matrix_log = enrichment_df_ln.loc[generic_residues, interest_residues]
 
             # Create visualization
             height = max(len(generic_residues) * 0.5, 2)
@@ -573,7 +580,8 @@ class ContactAnalysis:
                        ax=ax,
                        xticklabels=True,
                        yticklabels=True,
-                       )#vmin=0,center=1)
+                       vmin=0,
+                       center=1)
 
             plt.xticks(rotation=45, ha='right')
 
@@ -583,6 +591,9 @@ class ContactAnalysis:
                 print(f"Error writing file {out_path}: {str(e)}")
             finally:
                 plt.close(fig)
+
+            # Save numerical data
+            filtered_matrix_log.to_csv(out_path_txt, sep=' ', mode='w')
 
 def load_config(config_path: str) -> Config:
     """Load and parse YAML configuration file."""

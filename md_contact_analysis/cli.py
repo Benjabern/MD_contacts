@@ -115,9 +115,9 @@ def main():
             logger.info("structure files export complete")
 
             # Generate visualizations
-            enrichment_matrix, _ = analysis.enrichment()
+            enrichment_matrix, _ = analysis.sasa_norm_enrichment()
             analysis.plot_enrichments(enrichment_matrix)
-            analysis.generic_enrichment()
+            analysis.sasa_norm_generic_propensity()
             logger.info("visualizations complete")
             logger.info("contact analysis complete")
 
