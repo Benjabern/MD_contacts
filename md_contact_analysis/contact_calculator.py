@@ -6,6 +6,7 @@ import sys
 import time
 import traceback
 from datetime import datetime
+import h5py
 
 import numpy as np
 from MDAnalysis.analysis.distances import distance_array
@@ -75,8 +76,9 @@ def analyze_frame(args):
                 frame_min_dist[i,j] = frame_min_dist[j,i] = dist_array[min_idx]
                 idx += 1
         
-        contacts = np.zeros((n_groups, n_groups))
+        contacts = np.zeros((n_groups, n_groups), dtype=np.uint8)
         contacts[frame_min_dist <= cutoff] = 1
+
         return contacts
     
     except Exception as e:
@@ -85,31 +87,22 @@ def analyze_frame(args):
         return None
 
 
-def frame_analysis(matrix, row_start=None, row_end=None, col_start=None, col_end=None):
-    """
-    Count rows that contain at least one 1 in the specified range.
-    Uses numpy operations for maximum performance.
-
-    Args:
-        matrix: 2D numpy array or list of lists
-        row_start: Starting row index (inclusive), defaults to 0
-        row_end: Ending row index (exclusive), defaults to matrix height
-        col_start: Starting column index (inclusive), defaults to 0
-        col_end: Ending column index (exclusive), defaults to matrix width
-
-    Returns:
-        int: Number of rows containing at least one 1
-    """
-
-    # Slice matrix to specified range
-    submatrix = matrix[row_start:row_end, col_start:col_end]
-
-    with open('time_res.xvg', "a") as out:
-        out.write(f'{np.any(submatrix == 1, axis=1).sum()}\n')
+def append_to_hdf5(file_path, new_array, dataset_name='cmaps'):
+    with h5py.File(file_path, 'a') as f:
+        if dataset_name in f:
+            # Extend the dataset
+            dataset = f[dataset_name]
+            dataset.resize(dataset.shape[0] + 1, axis=0)
+            dataset[-1] = new_array
+        else:
+            # Create a new dataset with gzip compression
+            maxshape = (None,) + new_array.shape  # Allow unlimited rows
+            f.create_dataset(dataset_name, data=[new_array], maxshape=maxshape, chunks=True, compression='gzip', compression_opts=9)
 
 
 def run_contact_calculation(
         universe,
+        output_file,
         cutoff: float = 3.5,
         n_jobs: int = 16,
         start_frame: int = None,
@@ -148,7 +141,7 @@ def run_contact_calculation(
 
     # Use residue indices
     res_indices = [res.atoms.indices for res in universe.residues]
-    total_contacts = np.zeros((len(res_indices), len(res_indices)))
+    total_contacts = np.zeros((len(res_indices), len(res_indices)), dtype=np.uint32)
 
     # Process frames in chunks
     for chunk_start_idx in range(0, n_frames, chunk_size):
@@ -171,7 +164,7 @@ def run_contact_calculation(
             # Sum valid results, skipping None values
             for result in chunk_results:
                 if result is not None:
-                    frame_analysis(result, row_start=2170, row_end=2291, col_start=0, col_end=2170)
+                    append_to_hdf5(f"{output_file}.h5", result)
                     total_contacts += result
 
             end_time = time.time()
@@ -205,7 +198,7 @@ def write_contact_matrix(results, output_file, universe):
             'names': names
         }
 
-        with open(output_file, "w") as json_file:
+        with open(f"{output_file}.json", "w") as json_file:
             json.dump(out_dict, json_file)
         
         logging.info(f"Contact matrix written to {output_file}")

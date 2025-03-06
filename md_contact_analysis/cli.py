@@ -70,9 +70,13 @@ def main():
             # Load universe
             universe = mda.Universe(args.structure, args.trajectory)
 
+            # output file path
+            contacts_path = Path(args.output)
+
             # Generate contact matrix
             contact_matrix = run_contact_calculation(
                 universe,
+                contacts_path,
                 cutoff=args.cutoff,
                 n_jobs=args.jobs,
                 start_frame=args.begin,
@@ -82,7 +86,6 @@ def main():
             )
 
             # Write contact matrix
-            contacts_path = Path(args.output)
             write_contact_matrix(contact_matrix, contacts_path, universe)
 
         elif args.mode == 'analyze':
