@@ -11,7 +11,7 @@ pip install .
 
 ## Usage
 
-### Generate Contact Matrix
+### Calculate Contact Matrix
 To generate a json file containing an all against all count of contacts between residues, using 128 cores run:
 
 ```bash
@@ -30,7 +30,7 @@ a config file specifying atom ranges of interest needs to be provided (see templ
 ```bash
 md_contacts analyze -s structure.gro -c config.yaml -m contact_map.json
 ```
-Additionally, to preserve proper bonds in output .pdb files, chain identifiers for non consecutively numbered residues should be present in the config file.
+Additionally, to preserve proper bonds in output .pdb files, chain identifiers for non consecutively numbered residues should be present in the config file, i.e. if two residues in the same components have the same residue number they need to be specified to belong to different chains.
 All specified molecules of interest will be analysed individually as well as on average. A residue wise profile
 of contacts will be created for contacts to the ligand group as well as to all other members of the molecule of interest group.
 A pdb structure for each member of the molecule of interst group containing the the contacts to other molecules of interst as well as the ligand as b-factors will be created in addition to a matrix of pairwise enrichments in contacts bewteen molecules of interest.
