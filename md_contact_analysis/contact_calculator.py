@@ -48,7 +48,7 @@ def setup_logging(log_file=None):
 
 def analyze_frame(args):
     """
-    Analyze a single frame with error handling.
+    Analyze a single frame.
     
     Args:
         args (tuple): Tuple containing universe, frame_index, cutoff, and res_indices
@@ -67,7 +67,7 @@ def analyze_frame(args):
                 dist_array = distance_array(groups[i].positions, groups[j].positions, dimensions)
                 dist_arrays.append(dist_array)
         
-        # Find minimum distances and contacts for all group pairs
+        # Find minimum distances for all group pairs
         idx = 0
         for i in range(n_groups):
             for j in range(i+1, n_groups):
@@ -75,7 +75,8 @@ def analyze_frame(args):
                 min_idx = np.unravel_index(np.argmin(dist_array), dist_array.shape)
                 frame_min_dist[i,j] = frame_min_dist[j,i] = dist_array[min_idx]
                 idx += 1
-        
+
+        # Create binary contact matrix according to threshhold
         contacts = np.zeros((n_groups, n_groups), dtype=np.uint8)
         contacts[frame_min_dist <= cutoff] = 1
 
@@ -96,7 +97,7 @@ def append_to_hdf5(file_path, new_array, dataset_name='cmaps'):
             dataset[-1] = new_array
         else:
             # Create a new dataset with gzip compression
-            maxshape = (None,) + new_array.shape  # Allow unlimited rows
+            maxshape = (None,) + new_array.shape
             f.create_dataset(dataset_name, data=[new_array], maxshape=maxshape, chunks=True, compression='gzip', compression_opts=9)
 
 
@@ -154,7 +155,7 @@ def run_contact_calculation(
         with mp.Pool(processes=n_jobs) as pool:
             start_time = time.time()
 
-            # Prepare arguments for pool.starmap using actual frame numbers
+            # Prepare arguments for pool using actual frame numbers
             chunk_args = [(universe, frame_num, cutoff, res_indices)
                           for frame_num in chunk_frame_numbers]
 
@@ -174,7 +175,7 @@ def run_contact_calculation(
 
 def write_contact_matrix(results, output_file, universe):
     """
-    Write contact matrix to JSON file with correct residue names and numbers
+    Write contact matrix to JSON file with residue names and numbers
     
     Args:
         results: Contact matrix
