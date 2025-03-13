@@ -30,7 +30,7 @@ def main():
                         help='Input structure file (.gro, .pdb)')
     parser.add_argument('--log', help='Log file path')
 
-    # Contact generation arguments
+    # Contact calculation arguments
     contact_calc_group = parser.add_argument_group('Contact Generation')
     contact_calc_group.add_argument('-f', '--trajectory',
                                    help='Input trajectory file (.xtc)')
@@ -73,7 +73,7 @@ def main():
             # output file path
             contacts_path = Path(args.output)
 
-            # Generate contact matrix
+            # Calculate contact matrix
             contact_matrix = run_contact_calculation(
                 universe,
                 contacts_path,
