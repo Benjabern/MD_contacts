@@ -452,7 +452,12 @@ class ContactAnalysis:
         """Plot heatmap for sasa normalized enrichments between residues in molecules of interest."""
         output_dir = Path(self.config.project)
         out_path = output_dir / f'{self.config.molecules_of_interest.name}_c_enrichments_{self.config.project}.pdf'
-        
+
+        out_path_txt = output_dir / f'{self.config.molecules_of_interest.name}_c_enrichments_{self.config.project}.txt'
+        new = pd.DataFrame.sum(enrichment_matrix)
+        # Save numerical data
+        new.to_csv(out_path_txt, sep=' ', mode='w')
+
         fig, ax = plt.subplots(figsize=(10, 10), constrained_layout=True)
         sns.heatmap(enrichment_matrix, annot=False, cmap="coolwarm", vmin=0, center=1)
         plt.title('Contacts enrichment matrix', fontsize=20)
@@ -569,7 +574,6 @@ class ContactAnalysis:
             interest_residues = sorted(interest_residues)
             filtered_matrix = enrichment_df.loc[generic_residues, interest_residues]
             filtered_matrix_log = enrichment_df_ln.loc[generic_residues, interest_residues]
-
             # Create visualization
             height = max(len(generic_residues) * 0.5, 2)
             fig, ax = plt.subplots(figsize=(12, height), constrained_layout=True)
