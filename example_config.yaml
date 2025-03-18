@@ -1,5 +1,5 @@
 # Project name will be used to create an output directory and for file names
-project: triA_1
+project: example_output
 # Section specifying molecules of interest
 # Molecules of interest are analysed individually
 # in terms of contacts to each other as well as contacts to generic
