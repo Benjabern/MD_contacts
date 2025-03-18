@@ -546,11 +546,12 @@ class ContactAnalysis:
             for combination, values in combination_counts.items():
                 if values['occurrences'] > 0 and total_contacts > 0:
                     value = (values['total_count'] / total_contacts) / (values['total_sasa']/(sasa_interest*sasa_generic))
-                    log_value = -1 * (math.log(value))
+                    if value > 0:
+                        log_value = -1 * (math.log(value))
+                    else:
+                        log_value = 0
                 else:
                     value = 0
-                    log_value = 0
-
                 for res1 in combination:
                     for res2 in combination:
                         idx1 = residue_to_index[res1]
