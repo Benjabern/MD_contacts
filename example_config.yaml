@@ -1,5 +1,5 @@
 # Project name will be used to create an output directory and for file names
-project: triA_1
+project: example_output
 # Section specifying molecules of interest
 # Molecules of interest are analysed individually
 # in terms of contacts to each other as well as contacts to generic
@@ -9,37 +9,37 @@ molecules_of_interest:
   name: protein
   # Names and atom ranges for different components
   components:
-    hcptFAB_1: [1, 6507]
-    hcptFAB_2: [6508, 13014]
-    hcptFAB_3: [13015, 19521]
-    hcptFAB_4: [19522, 26028]
-    hcptFAB_5: [26029, 32535]
+    P_1: [1, 6507]
+    P_2: [6508, 13014]
+    P_3: [13015, 19521]
+    P_4: [19522, 26028]
+    P_5: [26029, 32535]
   # Chains for different components
   # important to specify if ordering in the input structure file is
   # not sequential, to preserve proper bonds and residue order in
   # visualization, or for easier identifiability
   chains:
-    hcptFAB_1:
+    P_1:
       - chain_id: "A"
         atom_range: [1, 3250]
       - chain_id: "B"
         atom_range: [3251, 6507]
-    hcptFAB_2:
+    P_2:
       - chain_id: "A"
         atom_range: [6508, 9757]
       - chain_id: "B"
         atom_range: [9758, 13014]
-    hcptFAB_3:
+    P_3:
       - chain_id: "A"
         atom_range: [13015, 16264]
       - chain_id: "B"
         atom_range: [16265, 19521]
-    hcptFAB_4:
+    P_4:
       - chain_id: "A"
         atom_range: [19522, 22771]
       - chain_id: "B"
         atom_range: [22772, 26028]
-    hcptFAB_5:
+    P_5:
       - chain_id: "A"
         atom_range: [26029, 29278]
       - chain_id: "B"
@@ -47,6 +47,6 @@ molecules_of_interest:
 # Section specifying generic molecules
 # Molecules in this section are not treated individually
 generic_molecules:
-  name: triA
+  name: nucleotide
   components:
-    triA: [32536, 36455]
+    Adenine: [32536, 36455]
