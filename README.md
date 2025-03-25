@@ -12,7 +12,7 @@ pip install .
 ## Usage
 
 ### Calculate Contact Matrix
-To generate a json file containing an all against all count of contacts between residues, using 128 cores run:
+To generate a json file containing an all-against-all count of contacts between residues as well as a h5 file containing a binary contact matrix for every frame, using 128 cores run:
 
 ```bash
 md_contacts calculate -s structure.gro -f trajectory.xtc -o contact_map.json -j 128
@@ -21,7 +21,10 @@ It is recomended to do a test run with a small number of parallel jobs (-j or --
 The chunk size parameter is usually fine at default value but lower values specified with --chunk-size can be used in a test run to estimate the time requirements of the calculations.
 A cutoff in Angstrom can be specified using the -c/--cutoff argument (default: 3.5).
 A structure (.gro) and trajectory (.xtc) file need to be specified with the -s and -f flags respectively.
-The -o/--output flag allows to specify the name of the system for the output file.
+The -o/--output flag allows to specify the name of the system for the output file. 
+The trajectory can be sliced using the -b, -e and -df flags, for the first and last frame index to consider as well as the step (every nth frame) to use.
+E.g. using -b 0 -e 100000 -df 10 will caqlculate contacts from the beginning of the trajectory up until frame 100000 for every 10th frame.
+For further analysis, the binary residue wise contact matrix for every frame is written to a h5 file (contained in the "cmaps" dataset).
 
 ### Analyze Contacts
 To analyse the contact matrix, in addition to the .json output from the calculate module and a corresponding .gro file,
