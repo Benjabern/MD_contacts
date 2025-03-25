@@ -249,7 +249,7 @@ class ContactAnalysis:
         """Analyze residue contacts for all molecules."""
         residue_contacts = {}
         nframes = self.contact_matrix[0][0]
-        
+        np.fill_diagonal(self.contact_matrix, 0)
         for m_of_interest, (p_start, p_end) in self.m_interest_ranges.items():
             generic_contacts = self._analyze_generic_contacts(p_start, p_end, nframes)
             interest_contacts = self._analyze_interest_contacts(m_of_interest, p_start, p_end, nframes)
