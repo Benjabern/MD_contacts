@@ -15,7 +15,7 @@ pip install .
 To generate a json file containing an all-against-all count of contacts between residues as well as a h5 file containing a binary contact matrix for every frame, using 128 cores run:
 
 ```bash
-md_contacts calculate -s structure.gro -f trajectory.xtc -o contact_map.json -j 128
+md_contacts calculate -s structure.gro -f trajectory.xtc -o contact_map -j 128
 ```
 It is recomended to do a test run with a small number of parallel jobs (-j or --jobs) to estimate the memory requirements per job. 
 The chunk size parameter is usually fine at default value but lower values specified with --chunk-size can be used in a test run to estimate the time requirements of the calculations.
