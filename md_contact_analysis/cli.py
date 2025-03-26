@@ -34,8 +34,8 @@ def main():
     contact_calc_group = parser.add_argument_group('Contact Generation')
     contact_calc_group.add_argument('-f', '--trajectory',
                                    help='Input trajectory file (.xtc)')
-    contact_calc_group.add_argument('-o', '--output', default='contacts.json',
-                        help='Output directory/file path')
+    contact_calc_group.add_argument('-o', '--output', default='contacts',
+                        help='Name for output files')
     contact_calc_group.add_argument('--cutoff', type=float, default=3.5,
                                    help='Distance cutoff for contacts in Angstrom')
     contact_calc_group.add_argument('-j', '--jobs', type=int, default=16,
