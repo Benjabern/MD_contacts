@@ -64,7 +64,7 @@ def analyze_frame(args):
         dist_arrays = []
         for i in range(n_groups):
             for j in range(i+1, n_groups):
-                dist_array = distance_array(groups[i].positions, groups[j].positions, dimensions)
+                dist_array = distance_array(groups[i].positions, groups[j].positions, box=dimensions)
                 dist_arrays.append(dist_array)
         
         # Find minimum distances for all group pairs
