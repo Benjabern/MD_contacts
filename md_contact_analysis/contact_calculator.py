@@ -8,8 +8,12 @@ import traceback
 from datetime import datetime
 import h5py
 
+from scipy.sparse import coo_matrix
+from contact_map_cython import build_contact_map_single_axis_cython
 import numpy as np
 from MDAnalysis.analysis.distances import distance_array
+from tensorstore import uint32
+
 
 def setup_logging(log_file=None):
     """
@@ -55,32 +59,51 @@ def analyze_frame(args):
     """
     try:
         universe, frame_index, cutoff, res_indices = args
-        n_groups = len(res_indices)    
+        # n_groups = len(res_indices)
         universe.trajectory[frame_index]
-        groups = [universe.atoms[indices] for indices in res_indices]
-        dimensions = universe.dimensions
-        frame_min_dist = np.zeros((n_groups, n_groups))
-        # Calculate distance arrays for all group pairs
-        dist_arrays = []
-        for i in range(n_groups):
-            for j in range(i+1, n_groups):
-                dist_array = distance_array(groups[i].positions, groups[j].positions, box=dimensions)
-                dist_arrays.append(dist_array)
-        
-        # Find minimum distances for all group pairs
-        idx = 0
-        for i in range(n_groups):
-            for j in range(i+1, n_groups):
-                dist_array = dist_arrays[idx]
-                min_idx = np.unravel_index(np.argmin(dist_array), dist_array.shape)
-                frame_min_dist[i,j] = frame_min_dist[j,i] = dist_array[min_idx]
-                idx += 1
+        # groups = [universe.atoms[indices] for indices in res_indices]
+        # dimensions = universe.dimensions
+        # frame_min_dist = np.zeros((n_groups, n_groups))
+        # # Calculate distance arrays for all group pairs
+        # dist_arrays = []
+        # for i in range(n_groups):
+        #     for j in range(i+1, n_groups):
+        #         dist_array = distance_array(groups[i].positions, groups[j].positions, box=dimensions)
+        #         dist_arrays.append(dist_array)
+        #
+        # # Find minimum distances for all group pairs
+        # idx = 0
+        # for i in range(n_groups):
+        #     for j in range(i+1, n_groups):
+        #         dist_array = dist_arrays[idx]
+        #         min_idx = np.unravel_index(np.argmin(dist_array), dist_array.shape)
+        #         frame_min_dist[i,j] = frame_min_dist[j,i] = dist_array[min_idx]
+        #         idx += 1
+        #
+        # # Create binary contact matrix according to threshhold
+        # contacts = np.zeros((n_groups, n_groups), dtype=np.uint8)
+        # contacts[frame_min_dist <= cutoff] = 1
 
-        # Create binary contact matrix according to threshhold
-        contacts = np.zeros((n_groups, n_groups), dtype=np.uint8)
-        contacts[frame_min_dist <= cutoff] = 1
 
-        return contacts
+
+        # Get the number of residues
+        num_residues = len(universe.residues)
+        num_atoms = len(universe.atoms)
+
+        # Initialize the residue contact matrix
+        residue_contact_matrix = np.zeros((num_residues, num_residues), dtype=np.uint32)
+        coords = universe.atoms.positions
+        contacts = build_contact_map_single_axis_cython(coords, cutoff)
+        # Populate the residue contact matrix based on the atom contact matrix
+        for i, j in zip(contacts.row, contacts.col):
+            for res_i, atom_indices_i in enumerate(res_indices):
+                if i in atom_indices_i:
+                    break
+            for res_j, atom_indices_j in enumerate(res_indices):
+                if j in atom_indices_j:
+                    break
+            residue_contact_matrix[res_i, res_j] = 1
+        return residue_contact_matrix
     
     except Exception as e:
         logging.error(f"Error processing frame {frame_index}: {e}")
@@ -143,6 +166,7 @@ def run_contact_calculation(
     # Use residue indices
     res_indices = [res.atoms.indices for res in universe.residues]
     total_contacts = np.zeros((len(res_indices), len(res_indices)), dtype=np.uint32)
+    #total_contacts = np.zeros((47, 47), dtype=np.int64)
 
     # Process frames in chunks
     for chunk_start_idx in range(0, n_frames, chunk_size):
@@ -189,6 +213,7 @@ def write_contact_matrix(results, output_file, universe):
 
         names = residue_names
         real_numbers = residue_numbers
+        results = results.astype(float)
         cmap = results.tolist()
         nres = int(len(cmap))
 
