@@ -1,6 +1,3 @@
-# contact_map_cython.pyx
-# cython: boundscheck=False, wraparound=False, cdivision=True
-
 import numpy as np
 cimport numpy as np
 from scipy.sparse import coo_matrix
@@ -53,7 +50,7 @@ def generate_final_pairs_1d_numba(np.ndarray[float, ndim=2] coords_3d,
     return pairs[:count].copy()
 
 
-def build_contact_map_single_axis_cython(np.ndarray coords, float cutoff):
+def build_contact_map_single_axis_cython(np.ndarray coords, float cutoff, list res_indices):
     """
     Build a sparse contact map using the cythonized function for pair generation.
     """
@@ -70,24 +67,31 @@ def build_contact_map_single_axis_cython(np.ndarray coords, float cutoff):
     cdef int max_pairs
     cdef float density_1d = 0.0
     max_pairs = (N * N)
-    #if range_1d <= 0:
-    #    max_pairs = (N * N)
-        #max_pairs = (N * (N - 1)) // 2
-    #else:
-    #    density_1d = N / range_1d
-    #    max_pairs = <int>((cutoff * density_1d) ** 2 / 10)
-    
     # Generate valid contact pairs.
     cdef np.ndarray pairs_ij = generate_final_pairs_1d_numba(coords, coord_1d, cutoff, max_pairs)
-    
+
     cdef np.ndarray i_idx = pairs_ij[:, 0]
     cdef np.ndarray j_idx = pairs_ij[:, 1]
-    
-    # Build the sparse contact map.
-    # For every valid pair (i, j), add the symmetric pair (j, i) and fill the diagonal.
-    cdef np.ndarray row = np.concatenate([i_idx, j_idx, np.arange(N)])
-    cdef np.ndarray col = np.concatenate([j_idx, i_idx, np.arange(N)])
-    cdef np.ndarray data = np.ones(row.shape[0], dtype=np.int8)
-    
-    contact_map_sparse = coo_matrix((data, (row, col)), shape=(N, N), dtype=np.int8)
-    return contact_map_sparse
+
+    # Create a dictionary to map atom indices to residue indices
+    cdef int num_residues = len(res_indices)
+    cdef int[:] atom_to_residue = np.empty(N, dtype=np.int32)
+    cdef int res_i, atom_index
+    for res_i in range(num_residues):
+        for atom_index in res_indices[res_i]:
+            atom_to_residue[atom_index] = res_i
+
+    # Initialize the residue contact matrix
+    cdef np.ndarray[np.uint32_t, ndim=2] residue_contact_matrix = np.zeros((num_residues, num_residues), dtype=np.uint32)
+
+    # Iterate over contacts and update the residue contact matrix
+    cdef int i, j, res_j
+    for k in range(pairs_ij.shape[0]):
+        i = pairs_ij[k, 0]
+        j = pairs_ij[k, 1]
+        res_i = atom_to_residue[i]
+        res_j = atom_to_residue[j]
+        residue_contact_matrix[res_i, res_j] = 1
+        residue_contact_matrix[res_j, res_i] = 1  # Ensure symmetry
+
+    return residue_contact_matrix

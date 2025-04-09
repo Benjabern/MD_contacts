@@ -59,50 +59,15 @@ def analyze_frame(args):
     """
     try:
         universe, frame_index, cutoff, res_indices = args
-        # n_groups = len(res_indices)
         universe.trajectory[frame_index]
-        # groups = [universe.atoms[indices] for indices in res_indices]
-        # dimensions = universe.dimensions
-        # frame_min_dist = np.zeros((n_groups, n_groups))
-        # # Calculate distance arrays for all group pairs
-        # dist_arrays = []
-        # for i in range(n_groups):
-        #     for j in range(i+1, n_groups):
-        #         dist_array = distance_array(groups[i].positions, groups[j].positions, box=dimensions)
-        #         dist_arrays.append(dist_array)
-        #
-        # # Find minimum distances for all group pairs
-        # idx = 0
-        # for i in range(n_groups):
-        #     for j in range(i+1, n_groups):
-        #         dist_array = dist_arrays[idx]
-        #         min_idx = np.unravel_index(np.argmin(dist_array), dist_array.shape)
-        #         frame_min_dist[i,j] = frame_min_dist[j,i] = dist_array[min_idx]
-        #         idx += 1
-        #
-        # # Create binary contact matrix according to threshhold
-        # contacts = np.zeros((n_groups, n_groups), dtype=np.uint8)
-        # contacts[frame_min_dist <= cutoff] = 1
-
-
 
         # Get the number of residues
         num_residues = len(universe.residues)
-        num_atoms = len(universe.atoms)
 
         # Initialize the residue contact matrix
-        residue_contact_matrix = np.zeros((num_residues, num_residues), dtype=np.uint32)
         coords = universe.atoms.positions
-        contacts = build_contact_map_single_axis_cython(coords, cutoff)
-        # Populate the residue contact matrix based on the atom contact matrix
-        for i, j in zip(contacts.row, contacts.col):
-            for res_i, atom_indices_i in enumerate(res_indices):
-                if i in atom_indices_i:
-                    break
-            for res_j, atom_indices_j in enumerate(res_indices):
-                if j in atom_indices_j:
-                    break
-            residue_contact_matrix[res_i, res_j] = 1
+        residue_contact_matrix = build_contact_map_single_axis_cython(coords, cutoff, res_indices)
+
         return residue_contact_matrix
     
     except Exception as e:
